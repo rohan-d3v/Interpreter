@@ -1,0 +1,21 @@
+Mstate is a function that takes the big list given by the parser and recursively determines where each sublist should go (ie what function should be called).
+
+Sub-functions:
+M_state_var
+M_state_=
+M_state_if
+M_state_while
+M_state_return
+
+M_bool_==
+M_bool_!=
+M_bool_>
+M_bool_<
+M_bool_>=
+M_bool_<=
+
+M_value_+
+M_value_-
+M_value_*
+M_value_/
+M_value_%
