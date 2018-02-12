@@ -7,8 +7,6 @@
 ;The interpreter function used to parse/interpret the java-like file (.javal)
 (define interpret
   (lambda (filename)
-    (evaluate filename)
-    (M_state (parser filename) S) ; where S is the base state (probably blank list, will determine later)
+    (evaluate (parse filename) '(()()))
+    )
   )
-)
-
