@@ -1,11 +1,11 @@
-#lang racket
+;#lang racket
 ; Interpreter Pt 1 EECS 345
 ; Group Members: Lee Radics, Zach Perlo, Rohan Krishna
 ; Case IDs:elr61, zip5, rxr353
 
 (load "simpleParser.scm") ;Load simple parser to enable parser use
 
-;The interpreter function used to parse/interpret the java-like file (.javal)
+;The interpreter function used to parse/interpret the java-ish file (.javal)
 (define interpret
   (lambda (filename)
     (evaluate (parser filename) '(()()));passes the filename to evaluate/parse program tree
@@ -30,13 +30,29 @@
 (define MState
   (lambda (command state)
     (cond
-      ((eq? state "error") "error")
-      ((eq? (car command) 'var) (declareHelper command state))
-      ((eq? (car command) '=) (assignHelper command state))
-      ((eq? (car command) 'if) (ifHelper command state))
-      ((eq? (car command) 'while) (whileHelper command state))
-      ((eq? (car command) 'return) (returnHelper command state))
-      (else "error")
+      ((eq? state "error") "error") ;return error if the state is error
+      ((eq? (car command) 'var) (declareHelper command state)) ;Variable declaration
+      ((eq? (car command) '=) (assignHelper command state)) ;Assign declaration
+      ((eq? (car command) 'if) (ifHelper command state)) ;if declaration
+      ((eq? (car command) 'while) (whileHelper command state)) ;while declaration
+      ((eq? (car command) 'return) (returnHelper command state)) ;return declaration
+      (else "error") ;standard throw error
       )
     )
   )
+
+; Function to evaluate integer val of expression
+; Example input: (+ a b) and state ((x y ...) (1 2 ...))
+; Returns error on abnormalities
+(Define MValue
+        (lambda  (expression state)
+          )
+        )
+
+;=====================;
+;MState Helper Methods
+;=====================;
+
+;======================;
+;General Helper Methods
+;======================;
