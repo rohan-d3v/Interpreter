@@ -167,33 +167,90 @@
 ;MValue Helper Methods
 ;=====================;
 
+(define operand1
+  (lambda (lis)
+    (cadr lis)
+    )
+  )
+
+(define operand2
+  (lambda (lis)
+    (caddr lis)
+    )
+  )
+
 ; addition helper
 (define +Helper
   (lambda (expression state)
+    (cond
+      ((null? expression) (error 'badoperation "Invalid expression")) 
+      ((null? (cdr expression)) (error 'badoperation "Invalid expression"))
+      ((null? (cdr (cdr expression))) (error 'badoperation "Invalid expression"))
+      ((AND (list? operand1) (list? operand2)) (+ (MValue operand1 state) (MValue operand1 state))) ;MValue because you will only
+      ((list? operand1) (+ (MValue operand1 state) operand2))                                       ;add a number to a number
+      ((list? operand2) (+ operand1 (MValue operand2 state)))
+      (else (+ operand1 operand2))
+      )
     )
   )
 
 ; subtraction helper
 (define -Helper
   (lambda (expression state)
+    (cond
+      ((null? expression) (error 'badoperation "Invalid expression")) 
+      ((null? (cdr expression)) (error 'badoperation "Invalid expression"))
+      ((null? (cdr (cdr expression))) (error 'badoperation "Invalid expression"))
+      ((AND (list? operand1) (list? operand2)) (+ (MValue operand1 state) (MValue operand1 state))) ;MValue because you will only
+      ((list? operand1) (- (MValue operand1 state) operand2))                                       ;add a number to a number
+      ((list? operand2) (- operand1 (MValue operand2 state)))
+      (else (- operand1 operand2))
+      )
     )
   )
 
 ; multiplication helper
 (define *Helper
   (lambda (expression state)
+    (cond
+      ((null? expression) (error 'badoperation "Invalid expression")) 
+      ((null? (cdr expression)) (error 'badoperation "Invalid expression"))
+      ((null? (cdr (cdr expression))) (error 'badoperation "Invalid expression"))
+      ((AND (list? operand1) (list? operand2)) (* (MValue operand1 state) (MValue operand1 state))) ;MValue because you will only
+      ((list? operand1) (* (MValue operand1 state) operand2))                                       ;add a number to a number
+      ((list? operand2) (* operand1 (MValue operand2 state)))
+      (else (* operand1 operand2))
+      )
     )
   )
 
 ; division helper
 (define /Helper
   (lambda (expression state)
+    (cond
+      ((null? expression) (error 'badoperation "Invalid expression")) 
+      ((null? (cdr expression)) (error 'badoperation "Invalid expression"))
+      ((null? (cdr (cdr expression))) (error 'badoperation "Invalid expression"))
+      ((AND (list? operand1) (list? operand2)) (quotient (MValue operand1 state) (MValue operand1 state))) ;MValue because you will only
+      ((list? operand1) (quotient (MValue operand1 state) operand2))                                       ;add a number to a number
+      ((list? operand2) (quotient operand1 (MValue operand2 state)))
+      (else (quotient operand1 operand2))
+      )
     )
   )
 
 ; mod helper
 (define %Helper
   (lambda (expression state)
+    (cond
+      ((null? expression) (error 'badoperation "Invalid expression")) 
+      ((null? (cdr expression)) (error 'badoperation "Invalid expression"))
+      ((null? (cdr (cdr expression))) (error 'badoperation "Invalid expression"))
+      ((AND (list? operand1) (list? operand2)) (remainder (MValue operand1 state) (MValue operand1 state))) ;MValue because you will only
+      ((list? operand1) (remainder (MValue operand1 state) operand2))                                       ;add a number to a number
+      ((list? operand2) (remainder operand1 (MValue operand2 state)))
+      (else (remainder operand1 operand2))
+      )
     )
   )
 
