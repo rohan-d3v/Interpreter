@@ -133,13 +133,109 @@
 ;MState Helper Methods
 ;=====================;
 
+; declare helper
+(define declareHelper
+  (lambda (command state)
+    )
+  )
+
+; assign helper
+(define assignHelper
+  (lambda (command state)
+    )
+  )
+
+; if helper
+(define ifHelper
+  (lambda (command state)
+    )
+  )
+
+; while helper
+(define whileHelper
+  (lambda (command state)
+    )
+  )
+
+; return helper
+(define returnHelper
+  (lambda (command state)
+    )
+  )
+
 ;=====================;
 ;MValue Helper Methods
 ;=====================;
 
+; addition helper
+(define +Helper
+  (lambda (expression state)
+    )
+  )
+
+; subtraction helper
+(define -Helper
+  (lambda (expression state)
+    )
+  )
+
+; multiplication helper
+(define *Helper
+  (lambda (expression state)
+    )
+  )
+
+; division helper
+(define /Helper
+  (lambda (expression state)
+    )
+  )
+
+; mod helper
+(define %Helper
+  (lambda (expression state)
+    )
+  )
+
 ;=====================;
 ;MBool Helper Methods
 ;=====================;
+
+; equality helper
+(define ==Helper
+  (lambda (expression state)
+    )
+  )
+
+; inequality helper
+(define !=Helper
+  (lambda (expression state)
+    )
+  )
+
+; greater than helper
+(define >Helper
+  (lambda (expression state)
+    )
+  )
+
+; less than helper
+(define <Helper
+  (lambda (expression state)
+    )
+  )
+
+; greater than or equal to helper
+(define >=Helper
+  (lambda (expression state)
+    )
+  )
+
+; less than or equal to helper
+(define <=Helper
+  (lambda (expression state)
+    )
+  )
 
 ;======================;
 ;Other Helper Methods
