@@ -45,9 +45,60 @@
 ; Example input: (+ a b) and state ((x y ...) (1 2 ...))
 ; Returns error on abnormalities
 (Define MValue
-        (lambda  (expression state)
+        (lambda (expression state)
           )
         )
+
+; function to look up a variable to get its value from the state
+; Example input: y and state ((x y ...) (1 2 ...)) would return 2
+(define lookup
+  (lambda (var state)
+    (lookup_helper2 (lookup_helper var (car state)) (cdr state))
+    )
+  )
+
+; returns the index the variable is stored in state
+(define lookup_helper
+  (lambda (var stateVars)
+    (cond
+      ((null? stateVars) (error 'badoperation "Variable not defined"))
+      ((eq? var (car stateVars)) 1)
+      (else (+ 1 (lookup_helper (var (cdr stateVars)))))
+      )
+    )
+  )
+
+; returns value at index x in state
+(define lookup_helper2
+  (lambda (x stateNums)
+    (cond
+      ((null? stateNums) (error 'badoperation "Variable not defined"))
+      ((AND (eq? x 1) (eq? (car stateNums) ; NULL value for vars )) (error 'badoperation "Variable not initialized"))
+      ((eq? x 1) (car stateNums))
+      (else (lookup_helper2 (- x 1) (cdr stateNums)))
+      )
+    )
+  )
+
+    
+; function to change a variable's current value
+; Example input: y, 5, and state ((x y ...) (1 2 ...)) would return state ((x y ...) (1 5 ...))
+(define changeVar
+  (lambda (var newVal state)
+    (cons (change_helper (lookup_helper var (car state)) newVal (cdr state)))
+    )
+  )
+
+; changes value at index x to newVal in state (returns state)
+(define change_helper
+  (lambda (x newVal stateNums)
+    (cond
+      ((null? stateNums) (error 'badoperation "Variable not defined"))
+      ((eq? x 1) (cons newVal (cdr stateNums)))
+      (else (cons (car stateNums) (change_helper (- x 1) newVal (cdr stateNums))))
+      )
+    )
+  )
 
 ;=====================;
 ;MState Helper Methods
