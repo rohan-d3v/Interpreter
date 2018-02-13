@@ -30,13 +30,13 @@
 (define MState
   (lambda (command state)
     (cond
-      ((eq? state "error") "error") ;return error if the state is error
+      ;((eq? state "error") "error") ;return error if the state is error
       ((eq? (car command) 'var) (declareHelper command state)) ;Variable declaration
       ((eq? (car command) '=) (assignHelper command state)) ;Assign declaration
       ((eq? (car command) 'if) (ifHelper command state)) ;if declaration
       ((eq? (car command) 'while) (whileHelper command state)) ;while declaration
       ((eq? (car command) 'return) (returnHelper command state)) ;return declaration
-      (else "error") ;standard throw error
+      (else (error 'badoperation "Invalid command")) ;standard throw error
       )
     )
   )
