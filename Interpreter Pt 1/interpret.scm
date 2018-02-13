@@ -17,11 +17,11 @@
 (define evaluate
   (lambda (prgm state)
     (cond
-      ((and (null? prgm) (eq? state #t)) "true");if prgm null and equals state true
+      ((and (null? prgm) (eq? state #t)) "true") ;if prgm null and equals state true
       ((and (null? prgm) (eq? state #f)) "false")
-      ((null? prgm) state);now finally check if prgm is null, then return state
-      (else (evaluate (cdr prgm) (MState (car prgm) state)));evaluate filename while calling MState on the command
-      )                                                     ;if checks are passed 
+      ((null? prgm) state) ;now finally check if prgm is null, then return state
+      (else (evaluate (cdr prgm) (MState (car prgm) state))) ;evaluate filename while calling MState on the command
+      )                                                      ;if checks are passed 
     )
   )
 
@@ -31,21 +31,50 @@
   (lambda (command state)
     (cond
       ;((eq? state "error") "error") ;return error if the state is error
-      ((eq? (car command) 'var) (declareHelper command state)) ;Variable declaration
-      ((eq? (car command) '=) (assignHelper command state)) ;Assign declaration
-      ((eq? (car command) 'if) (ifHelper command state)) ;if declaration
-      ((eq? (car command) 'while) (whileHelper command state)) ;while declaration
-      ((eq? (car command) 'return) (returnHelper command state)) ;return declaration
+      ((eq? (operator command) 'var) (declareHelper command state)) ;Variable declaration
+      ((eq? (operator command) '=) (assignHelper command state)) ;Assign declaration
+      ((eq? (operator command) 'if) (ifHelper command state)) ;if declaration
+      ((eq? (operator command) 'while) (whileHelper command state)) ;while declaration
+      ((eq? (operator command) 'return) (returnHelper command state)) ;return declaration
       (else (error 'badoperation "Invalid command")) ;standard throw error
       )
     )
   )
 
+(define operator
+  (lambda (lis)
+    (car lis)
+    )
+  )
+
 ; Function to evaluate integer val of expression
 ; Example input: (+ a b) and state ((x y ...) (1 2 ...))
-; Returns error on abnormalities
 (Define MValue
         (lambda (expression state)
+          (cond
+            ((eq? (operator expression) '+) (+Helper expression state)) ; computing addition
+            ((eq? (operator expression) '-) (-Helper expression state)) ; computing subtraction
+            ((eq? (operator expression) '*) (*Helper expression state)) ; computing multiplication
+            ((eq? (operator expression) '/) (/Helper expression state)) ; computing division
+            ((eq? (operator expression) '%) (%Helper expression state)) ; computing mod
+            (else (error 'badoperation "Invalid expression")) ;standard throw error
+            )
+          )
+        )
+
+; Function to evaluate truth val of expression
+; Example input: (== x y) and state ((x y ...) (1 2 ...))
+(Define MBool
+        (lambda (expression state)
+          (cond
+            ((eq? (operator expression) '==) (==Helper expression state)) ; checking equality
+            ((eq? (operator expression) '!=) (!=Helper expression state)) ; checking inequality
+            ((eq? (operator expression) '>) (>Helper expression state)) ; checking greater than
+            ((eq? (operator expression) '<) (<Helper expression state)) ; checking less than
+            ((eq? (operator expression) '>=) (>=Helper expression state)) ; checking greater than or equal to
+            ((eq? (operator expression) '<=) (<=Helper expression state)) ; checking less than or equal to
+            (else (error 'badoperation "Invalid expression")) ;standard throw error
+            )
           )
         )
 
@@ -81,21 +110,21 @@
   )
 
     
-; function to change a variable's current value
+; function to replace a variable's current value
 ; Example input: y, 5, and state ((x y ...) (1 2 ...)) would return state ((x y ...) (1 5 ...))
-(define changeVar
+(define replaceVar
   (lambda (var newVal state)
-    (cons (change_helper (lookup_helper var (car state)) newVal (cdr state)))
+    (cons (replace_helper (lookup_helper var (car state)) newVal (cdr state)))
     )
   )
 
-; changes value at index x to newVal in state (returns state)
-(define change_helper
+; replaces value at index x with newVal in stateNums (returns stateNums)
+(define replace_helper
   (lambda (x newVal stateNums)
     (cond
       ((null? stateNums) (error 'badoperation "Variable not defined"))
       ((eq? x 1) (cons newVal (cdr stateNums)))
-      (else (cons (car stateNums) (change_helper (- x 1) newVal (cdr stateNums))))
+      (else (cons (car stateNums) (replace_helper (- x 1) newVal (cdr stateNums))))
       )
     )
   )
@@ -104,6 +133,14 @@
 ;MState Helper Methods
 ;=====================;
 
+;=====================;
+;MValue Helper Methods
+;=====================;
+
+;=====================;
+;MBool Helper Methods
+;=====================;
+
 ;======================;
-;General Helper Methods
+;Other Helper Methods
 ;======================;
