@@ -1,11 +1,10 @@
-; #lang racket
 ; Interpreter Pt 1 EECS 345
 ; Group Members: Lee Radics, Zach Perlo, Rohan Krishna
 ; Case IDs:elr61, zip5, rxr353
 
 (load "simpleParser.scm") ;Load simple parser to enable parser use
 
-;The interpreter function used to parse/interpret the java-ish file (.javal)
+;The interpreter function used to parse/interpret the javaish file (.javaish)
 (define interpret
   (lambda (filename)
     (evaluate (parser filename) '(()()));passes the filename to evaluate/parse program tree
@@ -30,7 +29,7 @@
 (define MState
   (lambda (command state)
     (cond
-      ;((eq? state "error") "error") ;return error if the state is error
+      ((eq? state "error") "error") ;return error if the state is error
       ((eq? (operator command) 'var) (declareHelper command state)) ;Variable declaration
       ((eq? (operator command) '=) (assignHelper command state)) ;Assign declaration
       ((eq? (operator command) 'if) (ifHelper command state)) ;if declaration
@@ -41,23 +40,44 @@
     )
   )
 
-(define operator
-  (lambda (lis)
-    (car lis)
-    )
-  )
-
 ; Function to evaluate integer val of expression
 ; Example input: (+ a b) and state ((x y ...) (1 2 ...))
+; Returns error on any wierdness
 (Define MValue
         (lambda (expression state)
           (cond
-            ((eq? (operator expression) '+) (+Helper expression state)) ; computing addition
-            ((eq? (operator expression) '-) (-Helper expression state)) ; computing subtraction
-            ((eq? (operator expression) '*) (*Helper expression state)) ; computing multiplication
-            ((eq? (operator expression) '/) (/Helper expression state)) ; computing division
-            ((eq? (operator expression) '%) (%Helper expression state)) ; computing mod
-            (else (error 'badoperation "Invalid expression")) ;standard throw error
+            ((list? (car expression))
+             (MValue (car expression) state))
+
+           ;The operand expressions
+           ((and (eq? (car expression) '+) ;addition expression
+                 (not (or (eq? (MValue (cdr expression) state) "error")
+                          (eq? (MValue (cdr (cdr expression)) state) "error"))))
+           (+ (MValue (cdr expression) state) (MValue (cdr(cdr expression)) state)))
+           ((and (eq? (car expression) '-) ;standard subtraction
+                 (and (not (eq? (MValue (cdr expression) state) "error"))
+                      (null? (cdr (cdr expression)))))
+           (- 0 (MValue (cdr expression) state)))
+           ((and (eq? (car expression) '-) ;second subtraction statement
+                 (not (or (eq? (MValue (cdr expression) state) "error")
+                          (eq? (MValue (cdr (cdr expression)) state) "error"))))
+           (- (MValue (cdr expression) state) (MValue (cdr(cdr expression)) state)))
+           ((and (eq? (car expression) '*) ;Multiplication statement, I'm starting to hate these
+                 (not (or (eq? (MValue (cdr expression) state) "error")
+                          (eq? (MValue (cdr (cdr expression)) state) "error"))))
+           (* (MValue (cdr expression) state) (MValue (cdr(cdr expression)) state)))
+           ((and (eq? (car expression) '/) ;Division statement
+                 (not (or (eq? (MValue (cdr expression) state) "error")
+                          (eq? (MValue (cdr (cdr expression)) state) "error"))))
+           (floor (/ (MValue (cdr expression) state) (MValue (cdr(cdr expression)) state))));floor used to determine the higher value
+           ((and (eq? (car expression) '%) ;final modulo statement
+                 (not (or (eq? (MValue (cdr expression) state) "error")
+                          (eq? (MValue (cdr (cdr expression)) state) "error"))))
+           (modulo (MValue (cdr expression) state) (MValue (cdr(cdr expression)) state)))
+
+           ((number? (car epression)) (car expression))
+           ((isInList (car expression) state) (lookup (car expression) state))
+           (else "error")
             )
           )
         )
@@ -78,221 +98,76 @@
           )
         )
 
-; function to look up a variable to get its value from the state
-; Example input: y and state ((x y ...) (1 2 ...)) would return 2
-(define lookup
-  (lambda (var state)
-    (lookup_helper2 (lookup_helper var (car state)) (cdr state))
-    )
-  )
-
-; returns the index the variable is stored in state
-(define lookup_helper
-  (lambda (var stateVars)
-    (cond
-      ((null? stateVars) (error 'badoperation "Variable not defined"))
-      ((eq? var (car stateVars)) 1)
-      (else (+ 1 (lookup_helper (var (cdr stateVars)))))
-      )
-    )
-  )
-
-; returns value at index x in state
-(define lookup_helper2
-  (lambda (x stateNums)
-    (cond
-      ((null? stateNums) (error 'badoperation "Variable not defined"))
-      ((AND (eq? x 1) (eq? (car stateNums) ; NULL value for vars )) (error 'badoperation "Variable not initialized"))
-      ((eq? x 1) (car stateNums))
-      (else (lookup_helper2 (- x 1) (cdr stateNums)))
-      )
-    )
-  )
-
-    
-; function to replace a variable's current value
-; Example input: y, 5, and state ((x y ...) (1 2 ...)) would return state ((x y ...) (1 5 ...))
-(define replaceVar
-  (lambda (var newVal state)
-    (cons (replace_helper (lookup_helper var (car state)) newVal (cdr state)))
-    )
-  )
-
-; replaces value at index x with newVal in stateNums (returns stateNums)
-(define replace_helper
-  (lambda (x newVal stateNums)
-    (cond
-      ((null? stateNums) (error 'badoperation "Variable not defined"))
-      ((eq? x 1) (cons newVal (cdr stateNums)))
-      (else (cons (car stateNums) (replace_helper (- x 1) newVal (cdr stateNums))))
-      )
-    )
-  )
-
 ;=====================;
 ;MState Helper Methods
 ;=====================;
 
 ; declare helper
+; adds element to state if not declared
+; Takes (= z 4) and state ((x y ...) (1 2 ...))
 (define declareHelper
   (lambda (command state)
+    (cond
+      ((firstVarNotDeclared command (car state))
+       (addToList command state)) ;returns state with new variable added if command valid
+      (else "error");error on wierdness
+      )
     )
   )
 
 ; assign helper
+; Assigns value to an element in the state
+; Takes (= z 4) and state ((x y ...) (1 2 ...))
 (define assignHelper
   (lambda (command state)
+    ((isInList (car (cdr command)) state) ;returns state with var value if valid command
+     (const (car state) (cons (updateList (cdr command) state) '())))
+    (else "error")
     )
   )
 
+
 ; if helper
+; takes command (if bool true-expr false-expr) (false-expr optional) and state  ((x y) (1 2) ...))
 (define ifHelper
   (lambda (command state)
+    (cond
+      ((MBool (car (cdr command)) state)
+       (MState (car (cdr (cdr command))) state));returns state of program after correct statement is run
+      ((null? (cdr (cdr (cdr command)))) state)
+      (else (MState (car (cdr (cdr (cdr command)))) state))
+      )
     )
   )
 
 ; while helper
+; Runs the for the multiple iterations until condition is met
+; takes command (while bool body) and state ((x y ...) (1 2 ...))
 (define whileHelper
   (lambda (command state)
+    (cond
+      ((MBool (car (cdr command)) state);returns program state after all loops are run
+       (MState (car (cdr (cdr command))) state))
+      ((null? (cdr (cdr (cdr command))))
+       state)
+      (else (MState (car (cdr (cdr (cdr command)))) state))
+      )
     )
   )
 
 ; return helper
+; returns integer value of command if error not returned
+; Takes (= z 4) and state ((x y ...) (1 2 ...))
 (define returnHelper
   (lambda (command state)
-    )
-  )
-
-;=====================;
-;MValue Helper Methods
-;=====================;
-
-(define operand1
-  (lambda (lis)
-    (cadr lis)
-    )
-  )
-
-(define operand2
-  (lambda (lis)
-    (caddr lis)
-    )
-  )
-
-; addition helper
-(define +Helper
-  (lambda (expression state)
     (cond
-      ((null? expression) (error 'badoperation "Invalid expression")) 
-      ((null? (cdr expression)) (error 'badoperation "Invalid expression"))
-      ((null? (cdr (cdr expression))) (error 'badoperation "Invalid expression"))
-      ((AND (list? operand1) (list? operand2)) (+ (MValue operand1 state) (MValue operand1 state))) ;MValue because you will only
-      ((list? operand1) (+ (MValue operand1 state) operand2))                                       ;add a number to a number
-      ((list? operand2) (+ operand1 (MValue operand2 state)))
-      (else (+ operand1 operand2))
+      ((not (eq? (MValue (cdr command) state) "error"))
+       (MValue (cdr command) state)) ;Returns int value of command if MValue doesn't return "error"
+      (else (MBool (cdr command) state))
       )
     )
   )
 
-; subtraction helper
-(define -Helper
-  (lambda (expression state)
-    (cond
-      ((null? expression) (error 'badoperation "Invalid expression")) 
-      ((null? (cdr expression)) (error 'badoperation "Invalid expression"))
-      ((null? (cdr (cdr expression))) (error 'badoperation "Invalid expression"))
-      ((AND (list? operand1) (list? operand2)) (+ (MValue operand1 state) (MValue operand1 state))) ;MValue because you will only
-      ((list? operand1) (- (MValue operand1 state) operand2))                                       ;add a number to a number
-      ((list? operand2) (- operand1 (MValue operand2 state)))
-      (else (- operand1 operand2))
-      )
-    )
-  )
-
-; multiplication helper
-(define *Helper
-  (lambda (expression state)
-    (cond
-      ((null? expression) (error 'badoperation "Invalid expression")) 
-      ((null? (cdr expression)) (error 'badoperation "Invalid expression"))
-      ((null? (cdr (cdr expression))) (error 'badoperation "Invalid expression"))
-      ((AND (list? operand1) (list? operand2)) (* (MValue operand1 state) (MValue operand1 state))) ;MValue because you will only
-      ((list? operand1) (* (MValue operand1 state) operand2))                                       ;add a number to a number
-      ((list? operand2) (* operand1 (MValue operand2 state)))
-      (else (* operand1 operand2))
-      )
-    )
-  )
-
-; division helper
-(define /Helper
-  (lambda (expression state)
-    (cond
-      ((null? expression) (error 'badoperation "Invalid expression")) 
-      ((null? (cdr expression)) (error 'badoperation "Invalid expression"))
-      ((null? (cdr (cdr expression))) (error 'badoperation "Invalid expression"))
-      ((AND (list? operand1) (list? operand2)) (quotient (MValue operand1 state) (MValue operand1 state))) ;MValue because you will only
-      ((list? operand1) (quotient (MValue operand1 state) operand2))                                       ;add a number to a number
-      ((list? operand2) (quotient operand1 (MValue operand2 state)))
-      (else (quotient operand1 operand2))
-      )
-    )
-  )
-
-; mod helper
-(define %Helper
-  (lambda (expression state)
-    (cond
-      ((null? expression) (error 'badoperation "Invalid expression")) 
-      ((null? (cdr expression)) (error 'badoperation "Invalid expression"))
-      ((null? (cdr (cdr expression))) (error 'badoperation "Invalid expression"))
-      ((AND (list? operand1) (list? operand2)) (remainder (MValue operand1 state) (MValue operand1 state))) ;MValue because you will only
-      ((list? operand1) (remainder (MValue operand1 state) operand2))                                       ;add a number to a number
-      ((list? operand2) (remainder operand1 (MValue operand2 state)))
-      (else (remainder operand1 operand2))
-      )
-    )
-  )
-
-;=====================;
-;MBool Helper Methods
-;=====================;
-
-; equality helper
-(define ==Helper
-  (lambda (expression state)
-    )
-  )
-
-; inequality helper
-(define !=Helper
-  (lambda (expression state)
-    )
-  )
-
-; greater than helper
-(define >Helper
-  (lambda (expression state)
-    )
-  )
-
-; less than helper
-(define <Helper
-  (lambda (expression state)
-    )
-  )
-
-; greater than or equal to helper
-(define >=Helper
-  (lambda (expression state)
-    )
-  )
-
-; less than or equal to helper
-(define <=Helper
-  (lambda (expression state)
-    )
-  )
 
 ;======================;
 ;Other Helper Methods
@@ -333,9 +208,12 @@
     (cond
       (cond
       ((null? (cdr (cdr command))); to check if expressions has been passed
-       (cons (cons (car (cdr command)) (car state)) (cons (cons "undefined" (car (cdr state))) '())))
+       (cons (cons (car (cdr command)) (car state))
+             (cons (cons "undefined" (car (cdr state))) '())))
       ((eq? (MValue (cons (car (cdr (cdr command))) '()) state) "error");if the state is an error
-       (cons (cons (car (cdr command)) (car state)) (cons (cons (MBoolean (cons (car (cdr (cdr command))) '()) state) (car (cdr state))) '())))
+       (cons (cons (car (cdr command)) (car state))
+             (cons (cons (MBool (cons (car (cdr (cdr command))) '()) state)
+                         (car (cdr state))) '())))
       (else (cons (cons (car (cdr command)) (car state)) (cons (cons (MValue (cons (car (cdr (cdr command))) '()) state) (car (cdr state))) '())))
       )
       )
@@ -352,10 +230,12 @@
        #f) ; Should never get here because we already checked to see if variable can be added to list
       ((eq? (car command) (car (car state)))
        (cons (MValue (cons (car (cdr command)) '()) state) (cdr (car (cdr state)))))
-      (else (cons (car (car (cdr state))) (updateList command (cons (cdr (car state)) (cons (cdr (car (cdr state))) '())))))
-      )
+      (else (cons (car (car (cdr state)))
+                  (updateList command (cons (cdr (car state))
+                                            (cons (cdr (car (cdr state))) '())))))
     )
   )
+  
 ; Returns the value of the variable as stored in the state
 ; takes var as a variable name and state ((x y ...) (1 2 ...))
 (define lookup
