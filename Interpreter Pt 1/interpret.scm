@@ -76,7 +76,7 @@
            (modulo (MValue (cdr expression) state) (MValue (cdr(cdr expression)) state)))
 
            ((number? (car epression)) (car expression))
-           ((isInList (car expression) state) (lookup (car expression) state))
+           ((listCheck (car expression) state) (lookup (car expression) state))
            (else "error")
             )
           )
@@ -85,18 +85,58 @@
 ; Function to evaluate truth val of expression
 ; Example input: (== x y) and state ((x y ...) (1 2 ...))
 (Define MBool
-        (lambda (expression state)
+        (lambda (condition state)
           (cond
-            ((eq? (operator expression) '==) (==Helper expression state)) ; checking equality
-            ((eq? (operator expression) '!=) (!=Helper expression state)) ; checking inequality
-            ((eq? (operator expression) '>) (>Helper expression state)) ; checking greater than
-            ((eq? (operator expression) '<) (<Helper expression state)) ; checking less than
-            ((eq? (operator expression) '>=) (>=Helper expression state)) ; checking greater than or equal to
-            ((eq? (operator expression) '<=) (<=Helper expression state)) ; checking less than or equal to
-            (else (error 'badoperation "Invalid expression")) ;standard throw error
+            ((list? (car condition))
+             (MBool (car condition state))
+            ((and (eq? (car condition) '==) ;equality checker
+                  (not (or (eq? (MValue (cdr condition) state) "error")
+                           (eq? (MValue (cdr(cdr condition)) state) "error"))))
+      (eq? (MValue (cdr condition) state) (MValue (cdr(cdr condition)) state)))
+            ((and (eq? (car condition) '!=) ;inequality checker
+                  (not (or (eq? (MValue (cdr condition) state) "error")
+                           (eq? (MValue (cdr(cdr condition)) state) "error"))))
+      (not(eq? (MValue (cdr condition) state) (MValue (cdr(cdr condition)) state))))
+            ((and (eq? (car condition) '>) ;greater than checker
+                  (not (or (eq? (MValue (cdr condition) state) "error")
+                           (eq? (MValue (cdr(cdr condition)) state) "error"))))
+      (> (MValue (cdr condition) state) (MValue (cdr(cdr condition)) state)))
+            ((and (eq? (car condition) '<) ;lesser than checker
+                  (not (or (eq? (MValue (cdr condition) state) "error")
+                           (eq? (MValue (cdr(cdr condition)) state) "error"))))
+      (< (MValue (cdr condition) state) (MValue (cdr(cdr condition)) state)))
+            ((and (eq? (car condition) '>=) ;greater than/equal to checker
+                  (not (or (eq? (MValue (cdr condition) state) "error")
+                           (eq? (MValue (cdr(cdr condition)) state) "error"))))
+      (>= (MValue (cdr condition) state) (MValue (cdr(cdr condition)) state)))
+            ((and (eq? (car condition) '<=) ;lesser than/equal to checker
+                  (not (or (eq? (MValue (cdr condition) state) "error")
+                           (eq? (MValue (cdr(cdr condition)) state) "error"))))
+      (<= (MValue (cdr condition) state) (MValue (cdr(cdr condition)) state)))
+            ((and (eq? (car condition) '&&) ;and checker
+                  (not (or (eq? (MBoolean (cdr condition) state) "error")
+                           (eq? (MBoolean (cdr(cdr condition)) state) "error"))))
+      (and (MBoolean (cdr condition) state) (MBoolean (cdr(cdr condition)) state)))
+            ((and (eq? (car condition) '||) ;or checker
+                  (not (or (eq? (MBoolean (cdr condition) state) "error")
+                           (eq? (MBoolean (cdr(cdr condition)) state) "error"))))
+      (or (MBoolean (cdr condition) state) (MBoolean (cdr(cdr condition)) state)))
+            ((and (eq? (car condition) '!)
+                  (not (eq? (MBoolean (cdr condition) state) "error")))
+      (not (MBoolean (cdr condition) state)))
+            (eq? (car condition) 'true)  #t)
+            ((eq? (car condition) 'false)  #f)
+            ((eq? (car condition) '#t) #t)
+            ((eq? (car condition) '#f) #f)
+            ((listCheck (car condition) state)
+             (if (or (eq? (lookup (car condition) state) 'true)
+                     (eq? (lookup (car condition) state) '#t)) #t
+                          (if (or (eq? (lookup (car condition) state) 'false)
+                              (eq? (lookup (car condition) state) '#f)) #f "error")))
             )
           )
         )
+                                     
 
 ;=====================;
 ;MState Helper Methods
@@ -108,8 +148,8 @@
 (define declareHelper
   (lambda (command state)
     (cond
-      ((firstVarNotDeclared command (car state))
-       (addToList command state)) ;returns state with new variable added if command valid
+      ((decCheck command (car state))
+       (addL command state)) ;returns state with new variable added if command valid
       (else "error");error on wierdness
       )
     )
@@ -120,8 +160,8 @@
 ; Takes (= z 4) and state ((x y ...) (1 2 ...))
 (define assignHelper
   (lambda (command state)
-    ((isInList (car (cdr command)) state) ;returns state with var value if valid command
-     (const (car state) (cons (updateList (cdr command) state) '())))
+    ((listCheck (car (cdr command)) state) ;returns state with var value if valid command
+     (const (car state) (cons (updateL (cdr command) state) '())))
     (else "error")
     )
   )
@@ -174,20 +214,20 @@
 ;======================;
 ; returns #t if the variable being assigned has not been declared
 ; takes assignment command (= z 6) and state-vars (x y z ...) aka (car state)
-(define firstVarNotDeclared
+(define decCheck
   (lambda (command state-vars)
     (cond
       ((null? state-vars)
        #t);null state
       ((eq? (car state-vars) (car(cdr command)))
        #f);returns #f if variable is declared
-      (else (firstVarNotDeclared command (cdr state-vars)))
+      (else (decCheck command (cdr state-vars)))
       )
     )
   )
 
 ; returns #t if the variable has been declared (is in the state)
-(define isInList
+(define listCheck
   (lambda (var state)
     (cond
       ((null? state)
@@ -196,14 +236,14 @@
        #f);expression null
       ((eq? var (car (car state)))
        #t);true if declared
-      (else (isInList var (cons (cdr (car state)) (cons (cdr (car (cdr state))) '()))))
+      (else (listCheck var (cons (cdr (car state)) (cons (cdr (car (cdr state))) '()))))
       )
     )
   )
 
 ; Adds the variable and value
 ; takes command (var x expr) (expr optional) and state ((z y ...) (1 2 ...))
-(define addToList
+(define addL
   (lambda (var state)
     (cond
       (cond
@@ -223,7 +263,7 @@
 ; updates the state with the variable-value pair
 ; takes command (x expr) and state ((x y ...) (1 2 ...))
 ; this is a contingency method. You should never have to use this
-(define updateList
+(define updateL
   (lambda (command state)
     (cond
       ((null? (car state))
@@ -231,7 +271,7 @@
       ((eq? (car command) (car (car state)))
        (cons (MValue (cons (car (cdr command)) '()) state) (cdr (car (cdr state)))))
       (else (cons (car (car (cdr state)))
-                  (updateList command (cons (cdr (car state))
+                  (updateL command (cons (cdr (car state))
                                             (cons (cdr (car (cdr state))) '())))))
     )
   )
