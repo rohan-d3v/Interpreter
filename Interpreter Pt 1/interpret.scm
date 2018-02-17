@@ -16,9 +16,10 @@
 (define evaluate
   (lambda (prgm state)
     (cond
-      ((and (null? prgm) (eq? state #t)) "true") ;if prgm null and equals state true
-      ((and (null? prgm) (eq? state #f)) "false")
-      ((null? prgm) state) ;now finally check if prgm is null, then return state
+      ((eq? state #t) "true") ;if prgm null and equals state true
+      ((eq? state #f) "false")
+      ((number? state) state)
+      ((null? prgm) "Error, no return") ;now finally check if prgm is null, then return state
       (else (evaluate (cdr prgm) (MState (car prgm) state))) ;evaluate filename while calling MState on the command
       )                                                      ;if checks are passed 
     )
@@ -42,8 +43,8 @@
 
 ; Function to evaluate integer val of expression
 ; Example input: (+ a b) and state ((x y ...) (1 2 ...))
-; Returns error on any wierdness
-(Define MValue
+; Returns error on any weirdness
+(define MValue
         (lambda (expression state)
           (cond
             ((list? (car expression))
@@ -69,11 +70,11 @@
            ((and (eq? (car expression) '/) ;Division statement
                  (not (or (eq? (MValue (cdr expression) state) "error")
                           (eq? (MValue (cdr (cdr expression)) state) "error"))))
-           (floor (/ (MValue (cdr expression) state) (MValue (cdr(cdr expression)) state))));floor used to determine the higher value
+           (quotient (MValue (cdr expression) state) (MValue (cdr(cdr expression)) state)))
            ((and (eq? (car expression) '%) ;final modulo statement
                  (not (or (eq? (MValue (cdr expression) state) "error")
                           (eq? (MValue (cdr (cdr expression)) state) "error"))))
-           (modulo (MValue (cdr expression) state) (MValue (cdr(cdr expression)) state)))
+           (remainder (MValue (cdr expression) state) (MValue (cdr(cdr expression)) state)))
 
            ((number? (car epression)) (car expression))
            ((listCheck (car expression) state) (lookup (car expression) state))
@@ -84,11 +85,11 @@
 
 ; Function to evaluate truth val of expression
 ; Example input: (== x y) and state ((x y ...) (1 2 ...))
-(Define MBool
+(define MBool
         (lambda (condition state)
           (cond
             ((list? (car condition))
-             (MBool (car condition state))
+             (MBool (car condition) state))
             ((and (eq? (car condition) '==) ;equality checker
                   (not (or (eq? (MValue (cdr condition) state) "error")
                            (eq? (MValue (cdr(cdr condition)) state) "error"))))
@@ -124,7 +125,7 @@
             ((and (eq? (car condition) '!)
                   (not (eq? (MBoolean (cdr condition) state) "error")))
       (not (MBoolean (cdr condition) state)))
-            (eq? (car condition) 'true)  #t)
+            ((eq? (car condition) 'true)  #t)
             ((eq? (car condition) 'false)  #f)
             ((eq? (car condition) '#t) #t)
             ((eq? (car condition) '#f) #f)
@@ -160,8 +161,8 @@
 ; Takes (= z 4) and state ((x y ...) (1 2 ...))
 (define assignHelper
   (lambda (command state)
-    ((listCheck (car (cdr command)) state) ;returns state with var value if valid command
-     (const (car state) (cons (updateL (cdr command) state) '())))
+    ((listCheck (cadr command) state) ;returns state with var value if valid command
+     (cons (car state) (cons (updateL (cdr command) state) '())))
     (else "error")
     )
   )
@@ -181,23 +182,23 @@
   )
 
 ; while helper
-; Runs the for the multiple iterations until condition is met
+; Runs for multiple iterations until condition is no longer true
 ; takes command (while bool body) and state ((x y ...) (1 2 ...))
 (define whileHelper
   (lambda (command state)
     (cond
-      ((MBool (car (cdr command)) state);returns program state after all loops are run
-       (MState (car (cdr (cdr command))) state))
-      ((null? (cdr (cdr (cdr command))))
+      ((null? (cdr (cdr command)))
        state)
-      (else (MState (car (cdr (cdr (cdr command)))) state))
+      ((MBool (car (cdr command)) state)
+       (whileHelper command (MState (cdr (cdr command)) state)))
+      (else state)
       )
     )
   )
 
 ; return helper
 ; returns integer value of command if error not returned
-; Takes (= z 4) and state ((x y ...) (1 2 ...))
+; Takes (return (+ z 4)) and state ((x y ...) (1 2 ...))
 (define returnHelper
   (lambda (command state)
     (cond
@@ -246,7 +247,6 @@
 (define addL
   (lambda (var state)
     (cond
-      (cond
       ((null? (cdr (cdr command))); to check if expressions has been passed
        (cons (cons (car (cdr command)) (car state))
              (cons (cons "undefined" (car (cdr state))) '())))
@@ -256,13 +256,11 @@
                          (car (cdr state))) '())))
       (else (cons (cons (car (cdr command)) (car state)) (cons (cons (MValue (cons (car (cdr (cdr command))) '()) state) (car (cdr state))) '())))
       )
-      )
     )
   )
 
 ; updates the state with the variable-value pair
 ; takes command (x expr) and state ((x y ...) (1 2 ...))
-; this is a contingency method. You should never have to use this
 (define updateL
   (lambda (command state)
     (cond
@@ -274,6 +272,7 @@
                   (updateL command (cons (cdr (car state))
                                             (cons (cdr (car (cdr state))) '())))))
     )
+  )
   )
   
 ; Returns the value of the variable as stored in the state
