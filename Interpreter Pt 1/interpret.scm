@@ -10,19 +10,22 @@
   (lambda (filename)
     (evaluate (parser filename) initState) ;Passes the filename to evaluate/parse program tree
     )
-  )
+   )
 
 (define initState '(()())) ;Starting value of the state
 
-; Step through each line in the program tree
+
+; Function to evaluate and step through program tree
 (define evaluate
   (lambda (prgm state)
     (cond
-      ((and (null? prgm) (eq? state #t)) "true") ; if return was called with the value of true
+      ((and (null? prgm) (eq? state "error")) "error") ; if return was called with an error
+	  ((and (null? prgm) (eq? state #t)) "true") ; if return was called with the value of true
       ((and (null? prgm) (eq? state #f)) "false") ; if return was called with the value of false
+      ((number? state) state) ; if return was called with a numerical value
       ((null? prgm) state) ;now finally check if prgm is null, then return state
       (else (evaluate (cdr prgm) (MState (car prgm) state)))  ;evaluate filename while calling MState on the command
-      ) ; if checks are passed 
+      )                                                      ; if checks are passed 
     )
   )
 
