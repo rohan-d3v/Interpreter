@@ -1,2 +1,2 @@
-var x = (5 * 7 - 3) / 2;
+var x = 32 / 2;
 return x;

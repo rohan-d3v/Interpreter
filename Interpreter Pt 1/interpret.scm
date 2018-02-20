@@ -1,32 +1,30 @@
-; Interpreter Pt 1 EECS 345
-; Group Members: Lee Radics, Zach Perlo, Rohan Krishna
-; Case IDs: elr61, zip5, rxr353
+; Programing Project Part #1 EECS 345
+; Group Members: Justin Lee(jpl88), Ian Waldschmidt(isw5), Aaron Cutright(ahc49)
 
-(load "simpleParser.scm") ; Load simple parser to enable parser use
+; Loading in the simpleParser file to allow for use of the parser.
+(load "simpleParser.scm")
 
 ; The interpreter function used to parse/interpret the javaish file (.javaish)
 (define interpret
   (lambda (filename)
-    (evaluate (parser filename) initialState) ; passes the filename to evaluate/parse program tree
-    )
-  )
-  
-(define initialState '(()())) ; The starting value of the state
+    (evaluate (parser filename) initState) ;Passes the filename to evaluate/parse program tree
+    ))
 
-; Function to evaluate and step through program tree
+(define initState '(()())) ;Starting value of the state
+
+; Step through each line in the program tree
 (define evaluate
   (lambda (prgm state)
     (cond
-      ((eq? state "error") "error") ; if return was called with an error
-      ((eq? state #t) "true") ; if return was called with the value of true
-      ((eq? state #f) "false") ; if return was called with the value of false
-      ((number? state) state) ; if return was called with a numerical value
-      ((null? (cdr prgm)) state) ;now finally check if prgm is null, then return state
-      (else (evaluate (cdr prgm) (MState (car prgm) state))) ; evaluate filename while calling MState on the command
-      )                                                      ; if checks are passed 
+      ((and (null? prgm) (eq? state #t)) "true") ; if return was called with the value of true
+      ((and (null? prgm) (eq? state #f)) "false") ; if return was called with the value of false
+      ((null? prgm) state) ;now finally check if prgm is null, then return state
+      (else (evaluate (cdr prgm) (MState (car prgm) state)))  ;evaluate filename while calling MState on the command
+      ) ; if checks are passed 
     )
   )
 
+;==MState==;
 ; Function to return program state after command is run
 ; Commands: var, =, if, while, return and the state is ((x y ...) (1 2 ...))
 (define MState
@@ -38,261 +36,258 @@
       ((eq? (operator command) 'if) (ifHelper command state)) ; if declaration
       ((eq? (operator command) 'while) (whileHelper command state)) ; while declaration
       ((eq? (operator command) 'return) (returnHelper command state)) ; return declaration
-      (else (error 'badoperation "Invalid command")) ; standard throw error
+      (else "error") ; standard throw error
       )
     )
   )
 
-(define operator
-  (lambda (expression)
-    (car (expression))))
-
-(define operand1
-  (lambda (expression)
-    (cdr expression)))
-
-(define operand2
-  (lambda (expression)
-    (cdr (cdr expression))))
-
-(define valOrExpr ; either a value or an expression
-  (lambda (expression)
-    (car expression)))
-
-; Function to evaluate integer val of expression
-; Example input: (+ a b) and state ((x y ...) (1 2 ...))
-; Returns error on any weirdness
+;==MValue==;
+; Evaluate the integer value of an expression
+; given expression (+ a b) and state ((x y ...) (1 2 ...))
+; returns "error" on any abnormalities
 (define MValue
-        (lambda (expression state)
-          (cond
-            ((list? (valOrExpr expression))
-             (MValue (valOrExpr expression) state))
+ (lambda (expression state)
+   (cond
+     ((list? (valOrExpr expression)) 
+      (MValue (valOrExpr expression) state))
 
-           ; The operand expressions
-           ((and (eq? (operator expression) '+) ; addition expression
-                 (not (or (eq? (MValue (operand1 expression) state) "error")
-                          (eq? (MValue (operand2 expression) state) "error"))))
-           (+ (MValue (operand1 expression) state) (MValue (operand2 expression) state)))
-           
-           ((and (eq? (operator expression) '-) ; negation expression
-                 (and (not (eq? (MValue (operand1 expression) state) "error"))
-                      (null? (operand2 expression))))
-           (- 0 (MValue (operand1 expression) state)))
-           
-           ((and (eq? (operator expression) '-) ; standard subtraction expression
-                 (not (or (eq? (MValue (operand1 expression) state) "error")
-                          (eq? (MValue (operand2 expression) state) "error"))))
+    ; Operand Expressions
+     ((and (eq? (operator expression) '+) ;Addition expression
+      (not (or (eq? (MValue (operand1 expression) state) "error") 
+        (eq? (MValue (operand2 expression) state) "error"))))
+     (+ (MValue (operand1 expression) state) (MValue (operand2 expression) state)))
+
+     ((and (eq? (operator expression) '-) ;Negation expression
+      (and (not (eq? (MValue (operand1 expression) state) "error")) 
+        (null? (operand2 expression))))
+     (- 0 (MValue (operand1 expression) state)))
+
+     ((and (eq? (operator expression) '-) ;Subtraction expression
+      (not (or (eq? (MValue (operand1 expression) state) "error") 
+        (eq? (MValue (operand2 expression) state) "error"))))
            (- (MValue (operand1 expression) state) (MValue (operand2 expression) state)))
-           
-           ((and (eq? (operator expression) '*) ; multiplication expression
-                 (not (or (eq? (MValue (operand1 expression) state) "error")
-                          (eq? (MValue (operand2 expression) state) "error"))))
+
+     ((and (eq? (operator expression) '*) ;Multiplication expression
+      (not (or (eq? (MValue (operand1 expression) state) "error") 
+        (eq? (MValue (operand2 expression) state) "error"))))
            (* (MValue (operand1 expression) state) (MValue (operand2 expression) state)))
-           
-           ((and (eq? (operator expression) '/) ; division expression
-                 (not (or (eq? (MValue (operand1 expression) state) "error")
-                          (eq? (MValue (operand2 expression) state) "error"))))
-           (quotient (MValue (operand1 expression) state) (MValue (operand2 expression) state)))
-           
-           ((and (eq? (operator expression) '%) ; modulo expression
-                 (not (or (eq? (MValue (operand1 expression) state) "error")
-                          (eq? (MValue (operand2 expression) state) "error"))))
-           (remainder (MValue (operand1 expression) state) (MValue (operand2 expression) state)))
 
-           ((number? (valOrExpr expression)) (valOrExpr expression)) ; check if it's a normal number
-           ((not (decCheck (valOrExpr expression) (varList state))) (lookup (valOrExpr expression) state)) ; check if it's a variable, if so, return its value
-           (else "error")
-            )
-          )
-        )
+     ((and (eq? (operator expression) '/) ;Division expression
+      (not (or (eq? (MValue (operand1 expression) state) "error") 
+        (eq? (MValue (operand2 expression) state) "error"))))
+     (floor (/ (MValue (operand1 expression) state) (MValue (operand2 expression) state))))
 
+     ((and (eq? (operator expression) '%) ;Modulo expression
+      (not (or (eq? (MValue (operand1 expression) state) "error") 
+        (eq? (MValue (operand2 expression) state) "error"))))
+     (remainder (MValue (operand1 expression) state) (MValue (operand2 expression) state)))
+
+     ((number? (valOrExpr expression)) (valOrExpr expression)) ;Check if normal number
+     ((lCheck (valOrExpr expression) state) (lookup (valOrExpr expression) state))
+     (else "error")
+     )
+   )
+ )
+
+;==MBool==;
 ; Function to evaluate truth val of expression
 ; Example input: (== x y) and state ((x y ...) (1 2 ...))
 (define MBool
-        (lambda (condition state)
-          (cond
-            ((list? (valOrExpr condition))
-             (MBool (valOrExpr condition) state))
-            
-            ((and (eq? (operator condition) '==) ; equality checker
-                  (not (or (eq? (MValue (operand1 condition) state) "error")
-                           (eq? (MValue (operand2 condition) state) "error"))))
-             (eq? (MValue (operand1 condition) state) (MValue (operand2 condition) state)))
-            
-            ((and (eq? (operator condition) '!=) ; inequality checker
-                  (not (or (eq? (MValue (operand1 condition) state) "error")
-                           (eq? (MValue (operand2 condition) state) "error"))))
-             (not(eq? (MValue (operand1 condition) state) (MValue (operand2 condition) state))))
-            
-            ((and (eq? (operator condition) '>) ; greater than checker
-                  (not (or (eq? (MValue (operand1 condition) state) "error")
-                           (eq? (MValue (operand2 condition) state) "error"))))
-             (> (MValue (operand1 condition) state) (MValue (operand2 condition) state)))
-            
-            ((and (eq? (operator condition) '<) ; lesser than checker
-                  (not (or (eq? (MValue (operand1 condition) state) "error")
-                           (eq? (MValue (operand2 condition) state) "error"))))
-             (< (MValue (operand1 condition) state) (MValue (operand2 condition) state)))
-            
-            ((and (eq? (operator condition) '>=) ; greater than/equal to checker
-                  (not (or (eq? (MValue (operand1 condition) state) "error")
-                           (eq? (MValue (operand2 condition) state) "error"))))
-             (>= (MValue (operand1 condition) state) (MValue (operand2 condition) state)))
-            
-            ((and (eq? (operator condition) '<=) ; lesser than/equal to checker
-                  (not (or (eq? (MValue (operand1 condition) state) "error")
-                           (eq? (MValue (operand2 condition) state) "error"))))
-             (<= (MValue (operand1 condition) state) (MValue (operand2 condition) state)))
-            
-            ((and (eq? (operator condition) '&&) ; and checker
-                  (not (or (eq? (MBoolean (operand1 condition) state) "error")
-                           (eq? (MBoolean (operand2 condition) state) "error"))))
-             (and (MBoolean (operand1 condition) state) (MBoolean (operand2 condition) state)))
-            
-            ((and (eq? (operator condition) '||) ; or checker
-                  (not (or (eq? (MBoolean (operand1 condition) state) "error")
-                           (eq? (MBoolean (operand2 condition) state) "error"))))
-             (or (MBoolean (operand1 condition) state) (MBoolean (operand2 condition) state)))
-            
-            ((and (eq? (operator condition) '!) ; not checker
-                  (not (eq? (MBoolean (operand1 condition) state) "error")))
-             (not (MBoolean (operand1 condition) state)))
-            
-            ((eq? (valOrExpr condition) 'true)  #t)
-            ((eq? (valOrExpr condition) 'false)  #f)
-            ((eq? (valOrExpr condition) '#t) #t)
-            ((eq? (valOrExpr condition) '#f) #f)
-            
-            ((not (decCheck (valOrExpr condition) (varList state)))
-             (if (or (eq? (lookup (valOrExpr condition) state) 'true)
-                     (eq? (lookup (valOrExpr condition) state) '#t)) #t
-                          (if (or (eq? (lookup (valOrExpr condition) state) 'false)
-                              (eq? (lookup (valOrExpr condition) state) '#f)) #f "error")))
-            )
-          )
-        )
-                                     
+ (lambda (condition state)
+   (cond
+     ((list? (valOrExpr condition))
+      (MBool (valOrExpr condition) state))
+
+     ((and (eq? (operator condition) '==) ;Equality checker
+      (not (or (eq? (MValue (operand1 condition) state) "error")
+        (eq? (MValue (operand2 condition) state) "error"))))
+      (eq? (MValue (operand1 condition) state) (MValue (operand2 condition) state)))
+
+     ((and (eq? (operator condition) '!=) ;Inequality checker
+      (not (or (eq? (MValue (operand1 condition) state) "error")
+        (eq? (MValue (operand2 condition) state) "error"))))
+      (not(eq? (MValue (operand1 condition) state) (MValue (operand2 condition) state))))
+
+     ((and (eq? (operator condition) '>) ;Greater than checker
+      (not (or (eq? (MValue (operand1 condition) state) "error")
+        (eq? (MValue (operand2 condition) state) "error"))))
+      (> (MValue (operand1 condition) state) (MValue (operand2 condition) state)))
+
+     ((and (eq? (operator condition) '<) ;Less than checker
+      (not (or (eq? (MValue (operand1 condition) state) "error")
+        (eq? (MValue (operand2 condition) state) "error"))))
+      (< (MValue (operand1 condition) state) (MValue (operand2 condition) state)))
+
+     ((and (eq? (operator condition) '>=) ;Greater than equal to checker
+      (not (or (eq? (MValue (operand1 condition) state) "error")
+        (eq? (MValue (operand2 condition) state) "error"))))
+      (>= (MValue (operand1 condition) state) (MValue (operand2 condition) state)))
+
+     ((and (eq? (operator condition) '<=) ;Lesser than/ Equal to checker
+      (not (or (eq? (MValue (operand1 condition) state) "error")
+        (eq? (MValue (operand2 condition) state) "error"))))
+      (<= (MValue (operand1 condition) state) (MValue (operand2 condition) state)))
+
+     ((and (eq? (operator condition) '&&) ;And checker
+      (not (or (eq? (MBool (operand1 condition) state) "error")
+        (eq? (MBool (operand2 condition) state) "error"))))
+      (and (MBool (operand1 condition) state) (MBool (operand2 condition) state)))
+
+     ((and (eq? (operator condition) '||) ;Or checker
+      (not (or (eq? (MBool (operand1 condition) state) "error")
+        (eq? (MBool (operand2 condition) state) "error"))))
+      (or (MBool (operand1 condition) state) (MBool (operand2 condition) state)))
+
+     ((and (eq? (operator condition) '!) ;Not checker
+      (not (eq? (MBool (operand1 condition) state) "error")))
+     (not (MBool (operand1 condition) state)))
+
+     ((eq? (valOrExpr condition) 'true)  #t)
+     ((eq? (valOrExpr condition) 'false)  #f)
+     ((eq? (valOrExpr condition) '#t) #t)
+     ((eq? (valOrExpr condition) '#f) #f)
+
+     ((lCheck (valOrExpr condition) state) 
+      (if (or (eq? (lookup (valOrExpr condition) state) 'true)
+        (eq? (lookup (valOrExpr condition) state) '#t)) #t
+      (if (or (eq? (lookup (valOrExpr condition) state) 'false)
+        (eq? (lookup (valOrExpr condition) state) '#f)) #f "error")))
+
+     (else "error")
+     )
+   )
+ )
+
+;========================;
+;Language Helper Methods;
+;========================;
+(define operator (lambda (expression) (car expression)))
+
+(define operand1 (lambda (expression) (cdr expression)))
+
+(define operand2 (lambda (expression) (cddr expression)))
+
+; either a value or an expression
+(define valOrExpr (lambda (expression) (car expression)))
 
 ;=====================;
-;MState Helper Methods
+;MState Helper Methods;
 ;=====================;
 
-; declare helper
+; Declare helper
 ; adds element to state if not declared
 ; Takes (var z) and state ((x y ...) (1 2 ...))
 (define declareHelper
   (lambda (command state)
     (cond
-      ((decCheck (commandVar command) (varList state))
-       (addL command state)) ; returns state with new variable added if command valid
-      (else "error") ; error otherwise
+      ((decCheck command (commandVar state)) 
+        (addL command state)) ;returns state with new variable added if command valid
+      (else "error") ;error otherwise
       )
     )
   )
 
-(define commandVar
-  (lambda (command)
-    (car (cdr command))))
-
-; assign helper
+; Assign helper
 ; Assigns value to an element in the state
 ; Takes (= z 4) and state ((x y ...) (1 2 ...))
 (define assignHelper
   (lambda (command state)
-    ((not (decCheck (commandVar command) (varList state))) ; returns state with var value if valid command
-     (updateL command state))
-    (else "error")
-    )
-  )
-
-
-; if helper
-; takes command (if bool true-expr false-expr) (false-expr optional) and state  ((x y) (1 2) ...))
-(define ifHelper
-  (lambda (command state)
     (cond
-      ((MBool (ifCondition command) state) ; if the condition is true
-       (MState (ifTrueExpr command) state)) ; returns state of program after true expression is run
-      ((null? (ifFalseCheck command)) state) ; false expression is null so it will return the state
-      (else (MState (ifFalseExpr command) state)) ; else run the false expression
+      ((lCheck (commandVar command) state)
+       (cons (varList state) (cons (updateL (valList command) state)
+                               '()))) ;Returns state with updated val if valid command
+      (else "error")
       )
     )
   )
 
-(define ifCondition
-  (lambda (lis)
-    (car (cdr lis))))
+; If helper
+; takes command (if bool true-expr false-expr) (false-expr optional) and state  ((x y) (1 2) ...))
+(define ifHelper
+  (lambda (command state)
+    (cond
+      ((MBool (ifCondition command) state) ;If comdition trye
+       (MState (ifTrueExpr command) state)) ;Retusn state after true expression run
+      ((null? (ifFalseCheck command)) state) ;False expression null so will return state
+      (else (MState (ifFalseExpr command) state)) ;Else runs false expression
+      )
+    )
+  )
 
-(define ifTrueExpr
-  (lambda (lis)
-    (car (cdr (cdr lis)))))
+(define ifCondition (lambda (lis)(cadr lis)))
 
-(define ifFalseCheck
-  (lambda (lis)
-    (cdr (cdr (cdr lis)))))
+(define ifTrueExpr (lambda (lis) (caddr lis)))
 
-(define ifFalseExpr
-  (lambda (lis)
-    (car (cdr (cdr (cdr lis))))))
+(define ifFalseCheck (lambda (lis) (cdddr lis)))
 
-; while helper
+(define ifFalseExpr (lambda (lis) (cadddr lis)))
+
+; While helper
 ; Runs for multiple iterations until condition is no longer true
 ; takes command (while bool body) and state ((x y ...) (1 2 ...))
 (define whileHelper
   (lambda (command state)
     (cond
-      ((null? (bodyCheck command))
-       state)
-      ((MBool (whileCondition command) state)
-       (whileHelper command (MState (loopBody command) state)))
+      ((MBool (whileCondition command) state) (MState command (MState (caddr command) state)))
       (else state)
       )
     )
   )
 
-(define bodyCheck
-  (lambda (lis)
-    (cdr (cdr lis))))
 
-(define whileCondition
-  (lambda (lis)
-    (car (cdr lis))))
+(define whileCondition (lambda (lis) (cadr lis)))
 
-(define loopBody
-  (lambda (lis)
-    (car (cdr (cdr lis)))))
+(define loopBody (lambda (lis) (caddr lis)))
 
-; return helper
+; Return helper
 ; returns integer value of command if error not returned
 ; Takes (return (+ z 4)) and state ((x y ...) (1 2 ...))
 (define returnHelper
   (lambda (command state)
     (cond
       ((not (eq? (MValue (returnExpression command) state) "error"))
-       (MValue (returnExpression command) state)) ; Returns int value of command if MValue doesn't return "error"
-      (else (MBool (returnExpression command) state)) ; Returns the boolean value of the command if it wasn't a number value
+       (MValue (returnExpression command) state)) ;Returns int value of command if Mvalue doesn't return error
+      (else (MBool (returnExpression command) state)) ;Returns boolean value if command was not a number
       )
     )
   )
 
-(define returnExpression
-  (lambda (lis)
-    (car (cdr (lis)))))
+(define returnExpression (lambda (lis) (cdr lis)))
 
+;==========================;
+;Declaration Helper Methods;
+;==========================;
 
-;======================;
-;Other Helper Methods
-;======================;
+(define commandExpression (lambda (lis) (caddr lis)))
+
+(define varList (lambda (state) (car state)))
+
+(define valList (lambda (state) (cdr state)))
+
+(define commandVar (lambda (command) (cadr command)))
+
+(define otherVars (lambda (state) (cdar state)))
+
+(define otherVals (lambda (state) (cdadr state)))
+
+(define firstVar (lambda (state) (caar state)))
+
+(define firstVal (lambda (state) (caadr state)))
+
+(define otherCommand (lambda (state) (cddr state)))
+
+;====================;
+;Other Helper Methods;
+;====================;
+
 ; returns #t if the variable being assigned has not been declared
 ; takes assignment command (= z 6) and state-vars (x y z ...) aka (car state)
 (define decCheck
-  (lambda (var state-vars)
+  (lambda (command state-vars)
     (cond
-      ((null? state-vars)
-       #t) ; null state
-      ((eq? (car state-vars) var)
-       #f) ; returns #f if variable is declared
-      (else (decCheck var (cdr state-vars)))
+      ((null? state-vars) #t) ;Null state
+      ((eq? (varList state-vars) (commandVar command)) #f) ;f if valriable declared
+      (else (decCheck command (valList state-vars)))
       )
     )
   )
@@ -302,75 +297,59 @@
 (define addL
   (lambda (command state)
     (cond
-      ((null? (commandExpression command)) ; to check if expressions has been passed
+      ((null? (otherCommand command)) ;to check if expressions has been passed
        (cons (cons (commandVar command) (varList state))
-             (cons (cons "undefined" (car (valList state))) '())))
+             (cons (cons "undefined" (commandVar state)) '())))
       
-      ((eq? (MValue (commandExpression command) state) "error") ; if the state is an error from MValue, it must have been declared with boolean value
+      ((eq? (MValue (cons (commandExpression command) '()) state) "error") ;if the state is an error from MValue, it must have been declared with boolean value
        (cons (cons (commandVar command) (varList state))
-             (cons (cons (MBool (commandExpression command) state)
-                         (car (valList state))) '())))
+             (cons (cons (MBool (cons (commandExpression command) '()) state)
+                         (commandVar state)) '())))
       
-      (else (cons (cons (commandVar command) (varList state)) (cons (cons (MValue (commandExpression command) state) (car (valList state))) '())))
+      (else (cons (cons (commandVar command) (varList state))
+                  (cons (cons (MValue (cons (commandExpression command) '()) state)
+                              (commandVar state)) '())))
       )
     )
   )
 
-(define commandExpression
-  (lambda (lis)
-    (car (cdr (cdr lis)))))
-
-(define varList
-  (lambda (state)
-    (car state)))
-
-(define valList
-  (lambda (state)
-    (cdr state)))
+; returns #t if the variable has been declared (is in the state)
+; takes var 'a and state ((x y ...) (1 2 ...))
+(define lCheck
+  (lambda (var state)
+    (cond
+      ((null? state) #f)
+      ((null? (varList state)) #f)
+      ((eq? var (firstVar state)) #t)
+      (else (lCheck var (cons (otherVars state) (cons (otherVals state) '()))))
+      )
+    )
+  )
 
 ; updates the state with the variable-value pair
 ; takes command (= x expr) and state ((x y ...) (1 2 ...))
 (define updateL
   (lambda (command state)
     (cond
-      ((null? (varList state))
-       #f) ; Should never get here because we already checked to see if variable can be added to list
-      ((and (eq? (commandVar command) (car (varList state))) (eq? (MValue (commandExpression command) state) "error")) ; expression is a boolean
-       (cons (varList state) (cons (cons (MBool (commandExpression command) state) (otherVals state)) '())))
-      ((eq? (commandVar command) (car (varList state))) ; expression is an integer value
-       (cons (varList state) (cons (cons (MValue (commandExpression command) state) (otherVals state)) '())))
-      (else (cons (cons (firstVar state) (varList (updateL command (cons (otherVars state) (cons (otherVals state) '())))))
-                  (cons (cons (firstVal state)
-                              (valList (updateL command (cons (otherVars state) (cons (otherVals state) '()))))) '())))
+      ((null? (varList state)) #f) ; Should never get here because we already checked to see if variable can be added to list
+      ((eq? (varList command) (firstVar state))
+       (cons (MValue (cons (commandVar command) '()) state)
+             (otherVals state))) ; expression is a boolean
+      (else (cons (firstVal state)
+                  (updateL command (cons (otherVars state) (cons (otherVals state)
+                                                            '())))))
+      )
     )
   )
-  )
 
-(define otherVars
-  (lambda (state)
-    (cdr (car state))))
-
-(define otherVals
-  (lambda (state)
-    (cdr (car (cdr state)))))
-
-(define firstVar
-  (lambda (state)
-    (car (car state))))
-
-(define firstVal
-  (lambda (state)
-    (car (car (cdr state)))))
-  
 ; Returns the value of the variable as stored in the state
 ; takes var as a variable name and state ((x y ...) (1 2 ...))
 (define lookup
   (lambda (var state)
     (cond
-      ((null? (varList state))
-       "error") ; returns error if x isn't in the state
+      ((null? (varList state)) "error") ;returns error if X isn't in state
       ((eq? (firstVar state) var)
-       (firstVal state)) ; returns the first value if the first variable is equal to var
+       (firstVal state)); returns the first value if the first variable is equal to var
       (else (lookup var (cons (otherVars state) (cons (otherVals state) '()))))
       )
     )
