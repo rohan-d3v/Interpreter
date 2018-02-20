@@ -9,7 +9,8 @@
 (define interpret
   (lambda (filename)
     (evaluate (parser filename) initState) ;Passes the filename to evaluate/parse program tree
-    ))
+    )
+  )
 
 (define initState '(()())) ;Starting value of the state
 
