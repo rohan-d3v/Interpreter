@@ -1,5 +1,6 @@
-; Programing Project Part #1 EECS 345
-; Group Members: Justin Lee(jpl88), Ian Waldschmidt(isw5), Aaron Cutright(ahc49)
+; Interpreter Pt 1 EECS 345
+; Group Members: Lee Radics, Zach Perlo, Rohan Krishna
+; Case IDs: elr61, zip5, rxr353
 
 ; Loading in the simpleParser file to allow for use of the parser.
 (load "simpleParser.scm")
