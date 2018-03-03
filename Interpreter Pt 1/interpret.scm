@@ -12,7 +12,7 @@
     )
    )
 
-(define initState '(()())) ;Starting value of the state
+(define initState '((()()))) ;Starting value of the state
 
 
 ; Function to evaluate and step through program tree
@@ -20,7 +20,7 @@
   (lambda (prgm state)
     (cond
       ((and (null? prgm) (eq? state "error")) "error") ; if return was called with an error
-	  ((and (null? prgm) (eq? state #t)) "true") ; if return was called with the value of true
+      ((and (null? prgm) (eq? state #t)) "true") ; if return was called with the value of true
       ((and (null? prgm) (eq? state #f)) "false") ; if return was called with the value of false
       ((number? state) state) ; if return was called with a numerical value
       ((null? prgm) state) ;now finally check if prgm is null, then return state
@@ -36,6 +36,7 @@
   (lambda (command state)
     (cond
       ((eq? state "error") "error") ; return error if the state is error
+      ((eq? (operator command) 'begin) (blockHelper (blockBody) state)); Block start: parsed as (begin (var x 2))
       ((eq? (operator command) 'var) (declareHelper command state)) ; Variable declaration
       ((eq? (operator command) '=) (assignHelper command state)) ; Assign declaration
       ((eq? (operator command) 'if) (ifHelper command state)) ; if declaration
@@ -175,9 +176,23 @@
 ; either a value or an expression
 (define valOrExpr (lambda (expression) (car expression)))
 
+(define blockBody (lambda (block) (cdr block)))
+
 ;=====================;
 ;MState Helper Methods;
 ;=====================;
+
+; Block helper
+; adds a layer to the state
+; evaluates the block, then pops off the layer
+(define blockHelper
+  (lambda (command state)
+    (if (list? (evaluate command (addLayer state)))
+        (subLayer (evaluate command (addLayer state)))
+        state)))
+
+(define addLayer (lambda (state) (cons '() state)))
+(define subLayer (lambda (state) (cdr state)))
 
 ; Declare helper
 ; adds element to state if not declared
@@ -185,8 +200,8 @@
 (define declareHelper
   (lambda (command state)
     (cond
-      ((decCheck command (commandVar state)) 
-        (addL command state)) ;returns state with new variable added if command valid
+      ((decCheck (commandVar command) (topLayerVars state))
+        (addL command (topLayer state))) ;returns state with new variable added if command valid
       (else "error") ;error otherwise
       )
     )
@@ -199,8 +214,7 @@
   (lambda (command state)
     (cond
       ((lCheck (commandVar command) state)
-       (cons (varList state) (cons (updateL (valList command) state)
-                               '()))) ;Returns state with updated val if valid command
+       (updateL (valList command) state)) ;Returns state with updated val if valid command
       (else "error")
       )
     )
@@ -281,25 +295,40 @@
 
 (define otherCommand (lambda (state) (cddr state)))
 
+(define topLayer (lambda (state) (car state)))
+
+(define topLayerVars (lambda (state) (caar state)))
+
+(define topLayerVals (lambda (state) (cdar state)))
+
+(define otherLayers (lambda (state) (cdr state)))
+
+(define topLayerFirstVar (lambda (state) (caaar state)))
+
+(define topLayerFirstVal (lambda (state) (cadar state)))
+
+(define topLayerOtherVals (lambda (state) (cddar state)))
+
 ;====================;
 ;Other Helper Methods;
 ;====================;
 
 ; returns #t if the variable being assigned has not been declared
 ; takes assignment command (= z 6) and state-vars (x y z ...) aka (car state)
-(define decCheck
-  (lambda (command state-vars)
+(define decCheck  ; edited for blocks
+  (lambda (var stateVars)
     (cond
-      ((null? state-vars) #t) ;Null state
-      ((eq? (varList state-vars) (commandVar command)) #f) ;f if valriable declared
-      (else (decCheck command (valList state-vars)))
+      ((null? stateVars) #t) ;Null state
+      ((eq? (varList stateVars) var) #f) ;f if valriable declared
+      (else (decCheck var (valList stateVars)))
       )
     )
   )
 
+
 ; Adds the variable and value
 ; takes command (var x expr) (expr optional) and state ((z y ...) (1 2 ...))
-(define addL
+(define addL  ; not needed to change for blocks, since you never add to an inner block
   (lambda (command state)
     (cond
       ((null? (otherCommand command)) ;to check if expressions has been passed
@@ -319,43 +348,52 @@
   )
 
 ; returns #t if the variable has been declared (is in the state)
-; takes var 'a and state ((x y ...) (1 2 ...))
-(define lCheck
+; takes var 'a and state {((a b) (3 4 ...)) ((x y ...) (1 2 ...))}
+(define lCheck  ; edited for blocks
   (lambda (var state)
     (cond
       ((null? state) #f)
-      ((null? (varList state)) #f)
-      ((eq? var (firstVar state)) #t)
-      (else (lCheck var (cons (otherVars state) (cons (otherVals state) '()))))
+      ((null? (topLayerVars state)) (lCheck var (otherLayers state)))
+      ((eq? var (topLayerFirstVar state)) #t)
+      (else (lCheck var (cons (cons (otherVars (topLayer state)) (cons (otherVals (topLayer state)) '())) (otherLayers state))))
       )
     )
   )
 
 ; updates the state with the variable-value pair
-; takes command (= x expr) and state ((x y ...) (1 2 ...))
-(define updateL
+; takes command (x expr) and state {((a b) (3 4 ...)) ((x y ...) (1 2 ...))}
+(define updateL ; edited for blocks
   (lambda (command state)
     (cond
-      ((null? (varList state)) #f) ; Should never get here because we already checked to see if variable can be added to list
-      ((eq? (varList command) (firstVar state))
-       (cons (MValue (cons (commandVar command) '()) state)
-             (otherVals state))) ; expression is a boolean
-      (else (cons (firstVal state)
-                  (updateL command (cons (otherVars state) (cons (otherVals state)
-                                                            '())))))
+      ((null? state) "error") ; Should never get here because we already checked to see if variable can be added to list
+      ((null? (topLayerVars state)) (cons '() (updateL command (otherLayers state))))
+      ((eq? (varList command) (topLayerFirstVar state))
+       (cons (cons (topLayerVars state) (cons (MValue (cons (commandVar command) '()) state) (topLayerOtherVals state))) (otherLayers state)))
+      (else (cons (list
+                   (cons (topLayerFirstVar state) (topLayerVars
+                                                   (updateL command (cons (cons (otherVars (topLayer state))
+                                                                                (cons (otherVals (topLayer state)) '())) (otherLayers state)))))
+                   (cons (topLayerFirstVal state) (topLayerVals
+                                                   (updateL command (cons (cons (otherVars (topLayer state))
+                                                                                (cons (otherVals (topLayer state)) '())) (otherLayers state))))))
+                  (otherLayers
+                   (updateL command (cons (cons (otherVars (topLayer state))
+                                                (cons (otherVals (topLayer state)) '())) (otherLayers state))))))
       )
     )
   )
 
+
 ; Returns the value of the variable as stored in the state
-; takes var as a variable name and state ((x y ...) (1 2 ...))
-(define lookup
+; takes var as a variable name and state {((a b) (3 4 ...)) ((x y ...) (1 2 ...))}
+(define lookup  ; edited for blocks
   (lambda (var state)
     (cond
-      ((null? (varList state)) "error") ;returns error if X isn't in state
-      ((eq? (firstVar state) var)
-       (firstVal state)); returns the first value if the first variable is equal to var
-      (else (lookup var (cons (otherVars state) (cons (otherVals state) '()))))
+      ((null? state) "error") ;returns error if X isn't in state
+      ((null? (topLayerVars state)) (lookup var (otherLayers state)))
+      ((eq? (topLayerFirstVar state) var)
+       (topLayerFirstVal state)); returns the first value if the first variable is equal to var
+      (else (lookup var (cons (cons (otherVars (topLayer state)) (cons (otherVals (topLayer state)) '())) (otherLayers state))))
       )
     )
   )
