@@ -20,8 +20,8 @@
   (lambda (prgm state)
     (cond
       ((and (null? prgm) (eq? state "error")) "error") ; if return was called with an error
-      ((and (null? prgm) (eq? state #t)) "true") ; if return was called with the value of true
-      ((and (null? prgm) (eq? state #f)) "false") ; if return was called with the value of false
+      ((and (null? prgm) (eq? state #t)) 'true) ; if return was called with the value of true
+      ((and (null? prgm) (eq? state #f)) 'false) ; if return was called with the value of false
       ((number? state) state) ; if return was called with a numerical value
       ((null? prgm) state) ;now finally check if prgm is null, then return state
       (else (evaluate (cdr prgm) (MState (car prgm) state)))  ;evaluate filename while calling MState on the command
@@ -35,14 +35,14 @@
 (define MState
   (lambda (command state)
     (cond
-      ((eq? state "error") "error") ; return error if the state is error
+      ((iserror? state) state) ; return error if the state is error
       ((eq? (operator command) 'begin) (blockHelper (blockBody) state)); Block start: parsed as (begin (var x 2))
       ((eq? (operator command) 'var) (declareHelper command state)) ; Variable declaration
       ((eq? (operator command) '=) (assignHelper command state)) ; Assign declaration
       ((eq? (operator command) 'if) (ifHelper command state)) ; if declaration
       ((eq? (operator command) 'while) (whileHelper command state)) ; while declaration
       ((eq? (operator command) 'return) (returnHelper command state)) ; return declaration
-      (else "error") ; standard throw error
+      (else 'Error:InvalidCommand) ; standard throw error
       )
     )
   )
@@ -54,43 +54,39 @@
 (define MValue
  (lambda (expression state)
    (cond
+   	 ((not (list? expression)) 
+   	 	(MValue (cons expression '()) state))
      ((list? (valOrExpr expression)) 
-      (MValue (valOrExpr expression) state))
+     	(MValue (valOrExpr expression) state))
 
     ; Operand Expressions
      ((and (eq? (operator expression) '+) ;Addition expression
-      (not (or (eq? (MValue (operand1 expression) state) "error") 
-        (eq? (MValue (operand2 expression) state) "error"))))
+      (validoperands? expression state))
      (+ (MValue (operand1 expression) state) (MValue (operand2 expression) state)))
 
      ((and (eq? (operator expression) '-) ;Negation expression
-      (and (not (eq? (MValue (operand1 expression) state) "error")) 
-        (null? (operand2 expression))))
+      (validoperand? expression state))
      (- 0 (MValue (operand1 expression) state)))
 
      ((and (eq? (operator expression) '-) ;Subtraction expression
-      (not (or (eq? (MValue (operand1 expression) state) "error") 
-        (eq? (MValue (operand2 expression) state) "error"))))
+      (validoperands? expression state))
            (- (MValue (operand1 expression) state) (MValue (operand2 expression) state)))
 
      ((and (eq? (operator expression) '*) ;Multiplication expression
-      (not (or (eq? (MValue (operand1 expression) state) "error") 
-        (eq? (MValue (operand2 expression) state) "error"))))
+      (validoperands? expression state))
            (* (MValue (operand1 expression) state) (MValue (operand2 expression) state)))
 
      ((and (eq? (operator expression) '/) ;Division expression
-      (not (or (eq? (MValue (operand1 expression) state) "error") 
-        (eq? (MValue (operand2 expression) state) "error"))))
+      (validoperands? expression state))
      (floor (/ (MValue (operand1 expression) state) (MValue (operand2 expression) state))))
 
      ((and (eq? (operator expression) '%) ;Modulo expression
-      (not (or (eq? (MValue (operand1 expression) state) "error") 
-        (eq? (MValue (operand2 expression) state) "error"))))
+      (validoperands? expression state))
      (remainder (MValue (operand1 expression) state) (MValue (operand2 expression) state)))
 
      ((number? (valOrExpr expression)) (valOrExpr expression)) ;Check if normal number
      ((lCheck (valOrExpr expression) state) (lookup (valOrExpr expression) state))
-     (else "error")
+     (else 'Error:InvalidExpression)
      )
    )
  )
@@ -397,3 +393,31 @@
       )
     )
   )
+
+; Tests to see if the given variable is an error
+; returns #t if it is, false otherwise
+(define iserror?
+  (lambda (state)
+    (cond
+      ((or (eq? state 'Error:UndeclaredVariable) (eq? state 'Error:VariableAlreadyDeclared)
+           (eq? state 'Error:InvalidBooleanExpression) (eq? state 'Error:InvalidExpression)
+           (eq? state 'Error:InvalidCommand) (eq? state 'Error:UninitializedVariable)) #t)
+      (else #f))))
+
+; Tests whether the operand to the unary command is valid
+; Also checks to make sure it is a unary operation, not a binary one
+; return #t if it is, false otherwise
+(define validoperand?
+  (lambda (expression state)
+    (and
+     (not (iserror? (MValue (cdr expression) state)))
+     (null? (cdr (cdr expression))))))
+
+; Tests whether the operands to the binary command are valid
+; return #t if they are, false otherwise
+(define validoperands?
+  (lambda (expression state)
+    (and
+     (not (iserror? (MValue (cdr expression) state)))
+     (not (iserror? (MValue (cdr (cdr expression)) state)))
+     )))
