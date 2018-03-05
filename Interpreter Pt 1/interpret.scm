@@ -1,4 +1,4 @@
-; Interpreter Pt 1 EECS 345
+; Interpreter Pt 2 EECS 345
 ; Group Members: Lee Radics, Zach Perlo, Rohan Krishna
 ; Case IDs: elr61, zip5, rxr353
 
