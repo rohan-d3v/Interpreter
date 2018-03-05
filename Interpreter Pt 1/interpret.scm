@@ -97,12 +97,13 @@
 (define MBool
  (lambda (condition state)
    (cond
+   	 ((not (list? condition))
+   	 	(MBool (cons condition '()) state))
      ((list? (valOrExpr condition))
       (MBool (valOrExpr condition) state))
 
      ((and (eq? (operator condition) '==) ;Equality checker
-      (not (or (eq? (MValue (operand1 condition) state) "error")
-        (eq? (MValue (operand2 condition) state) "error"))))
+      (validoperands? condition state))
       (eq? (MValue (operand1 condition) state) (MValue (operand2 condition) state)))
 
      ((and (eq? (operator condition) '!=) ;Inequality checker
@@ -111,51 +112,42 @@
       (not(eq? (MValue (operand1 condition) state) (MValue (operand2 condition) state))))
 
      ((and (eq? (operator condition) '>) ;Greater than checker
-      (not (or (eq? (MValue (operand1 condition) state) "error")
-        (eq? (MValue (operand2 condition) state) "error"))))
+      (validoperands? condition state))
       (> (MValue (operand1 condition) state) (MValue (operand2 condition) state)))
 
      ((and (eq? (operator condition) '<) ;Less than checker
-      (not (or (eq? (MValue (operand1 condition) state) "error")
-        (eq? (MValue (operand2 condition) state) "error"))))
+      (validoperands? condition state))
       (< (MValue (operand1 condition) state) (MValue (operand2 condition) state)))
 
      ((and (eq? (operator condition) '>=) ;Greater than equal to checker
-      (not (or (eq? (MValue (operand1 condition) state) "error")
-        (eq? (MValue (operand2 condition) state) "error"))))
+      (validoperands? condition state))
       (>= (MValue (operand1 condition) state) (MValue (operand2 condition) state)))
 
      ((and (eq? (operator condition) '<=) ;Lesser than/ Equal to checker
-      (not (or (eq? (MValue (operand1 condition) state) "error")
-        (eq? (MValue (operand2 condition) state) "error"))))
+      (validoperands? condition state))
       (<= (MValue (operand1 condition) state) (MValue (operand2 condition) state)))
 
      ((and (eq? (operator condition) '&&) ;And checker
-      (not (or (eq? (MBool (operand1 condition) state) "error")
-        (eq? (MBool (operand2 condition) state) "error"))))
+      (validbools? condition state))
       (and (MBool (operand1 condition) state) (MBool (operand2 condition) state)))
 
      ((and (eq? (operator condition) '||) ;Or checker
-      (not (or (eq? (MBool (operand1 condition) state) "error")
-        (eq? (MBool (operand2 condition) state) "error"))))
+      (validbools? condition state))
       (or (MBool (operand1 condition) state) (MBool (operand2 condition) state)))
 
      ((and (eq? (operator condition) '!) ;Not checker
-      (not (eq? (MBool (operand1 condition) state) "error")))
+      (validbool? condition state))
      (not (MBool (operand1 condition) state)))
 
-     ((eq? (valOrExpr condition) 'true)  #t)
-     ((eq? (valOrExpr condition) 'false)  #f)
-     ((eq? (valOrExpr condition) '#t) #t)
-     ((eq? (valOrExpr condition) '#f) #f)
+     ((true? (valOrExpr condition)) #t)
+     ((false? (valOrExpr condition)) #f)
 
-     ((lCheck (valOrExpr condition) state) 
-      (if (or (eq? (lookup (valOrExpr condition) state) 'true)
-        (eq? (lookup (valOrExpr condition) state) '#t)) #t
-      (if (or (eq? (lookup (valOrExpr condition) state) 'false)
-        (eq? (lookup (valOrExpr condition) state) '#f)) #f "error")))
+     ((lCheck (valOrExpr condition) state)
+     	(if (true? (lookup (valOrExpr condition) state)) #t
+     		(if (false? (lookup (valOrExpr condition) state)) #f
+     			'Error:UninitializedVariable)))
 
-     (else "error")
+     (else 'Error:InvalidBooleanExpression)
      )
    )
  )
@@ -198,7 +190,7 @@
     (cond
       ((decCheck (commandVar command) (topLayerVars state))
         (addL command (topLayer state))) ;returns state with new variable added if command valid
-      (else "error") ;error otherwise
+      (else 'Error:UndeclaredVariable) ;error otherwise
       )
     )
   )
@@ -211,7 +203,7 @@
     (cond
       ((lCheck (commandVar command) state)
        (updateL (valList command) state)) ;Returns state with updated val if valid command
-      (else "error")
+      (else 'Error:UndeclaredVariable)
       )
     )
   )
@@ -410,14 +402,39 @@
 (define validoperand?
   (lambda (expression state)
     (and
-     (not (iserror? (MValue (cdr expression) state)))
-     (null? (cdr (cdr expression))))))
+     (not (iserror? (MValue (operand1 expression) state)))
+     (null? (operand2 expression)))))
 
 ; Tests whether the operands to the binary command are valid
 ; return #t if they are, false otherwise
 (define validoperands?
   (lambda (expression state)
     (and
-     (not (iserror? (MValue (cdr expression) state)))
-     (not (iserror? (MValue (cdr (cdr expression)) state)))
+     (not (iserror? (MValue (operand1 expression) state)))
+     (not (iserror? (MValue (operand2 expression) state)))
      )))
+
+; Tests whether the boolean values to the binary command are valid
+; return #t if they are, false otherwise
+(define validbools?
+  (lambda (condition state)
+    (and
+     (not (iserror? (MBoolean (operand1 condition) state)))
+     (not (iserror? (MBoolean (operand2 condition) state)))
+     )))
+
+; Tests whether the boolean value to the unary command is valid
+; return #t if it is, false otherwise
+(define validbool?
+  (lambda (condition state)
+    (not (iserror? (MBoolean (operand1 condition) state)))))
+
+; return #t if the expression is "truthy" (#t from scheme or 'true from java-ish)
+(define true?
+  (lambda (expression)
+    (or (eq? expression #t) (eq? expression 'true))))
+
+; return #t if the expression is "falsey" (#f from scheme or 'false from java-ish)
+(define false?
+  (lambda (expression)
+    (or (eq? expression #f) (eq? expression 'false))))
