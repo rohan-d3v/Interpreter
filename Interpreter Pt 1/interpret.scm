@@ -349,24 +349,24 @@
   )
 
 ; updates the state with the variable-value pair
-; takes command (x expr) and state {((a b) (3 4 ...)) ((x y ...) (1 2 ...))}
+; takes command (x expr) and state {((a b ...) (3 4 ...)) ((x y ...) (1 2 ...))}
 (define updateL ; edited for blocks
   (lambda (command state)
     (cond
       ((null? state) "error") ; Should never get here because we already checked to see if variable can be added to list
       ((null? (topLayerVars state)) (cons '() (updateL command (otherLayers state))))
       ((eq? (varList command) (topLayerFirstVar state))
-       (cons (cons (topLayerVars state) (cons (MValue (cons (commandVar command) '()) state) (topLayerOtherVals state))) (otherLayers state)))
+       (cons (list (topLayerVars state) (cons (MValue (cons (commandVar command) '()) state) (topLayerOtherVals state))) (otherLayers state)))
       (else (cons (list
                    (cons (topLayerFirstVar state) (topLayerVars
-                                                   (updateL command (cons (cons (otherVars (topLayer state))
-                                                                                (cons (otherVals (topLayer state)) '())) (otherLayers state)))))
+                                                   (updateL command (cons (list (otherVars (topLayer state))
+                                                                                (otherVals (topLayer state))) (otherLayers state)))))
                    (cons (topLayerFirstVal state) (topLayerVals
-                                                   (updateL command (cons (cons (otherVars (topLayer state))
-                                                                                (cons (otherVals (topLayer state)) '())) (otherLayers state))))))
+                                                   (updateL command (cons (list (otherVars (topLayer state))
+                                                                                (otherVals (topLayer state))) (otherLayers state))))))
                   (otherLayers
-                   (updateL command (cons (cons (otherVars (topLayer state))
-                                                (cons (otherVals (topLayer state)) '())) (otherLayers state))))))
+                   (updateL command (cons (list (otherVars (topLayer state))
+                                                (otherVals (topLayer state))) (otherLayers state))))))
       )
     )
   )
