@@ -1,7 +1,6 @@
 ; Interpreter Pt 2 EECS 345
 ; Group Members: Lee Radics, Zach Perlo, Rohan Krishna
 ; Case IDs: elr61, zip5, rxr353
-
 ; Loading in the simpleParser file to allow for use of the parser.
 (load "simpleParser.scm")
 
@@ -11,8 +10,7 @@
     (evaluate (parser filename) initState) ;Passes the filename to evaluate/parse program tree
     )
    )
-
-(define initState '((()()))) ;Starting value of the state
+(define initState '(()())) ;Starting value of the state
 
 
 ; Function to evaluate and step through program tree
@@ -35,8 +33,8 @@
 (define MState
   (lambda (command state)
     (cond
-      ((iserror? state) state) ; return error if the state is error
-      ((eq? (operator command) 'begin) (blockHelper (blockBody) state)); Block start: parsed as (begin (var x 2))
+      ((errList state) state) ; return error if the state is error
+      ;((eq? (operator command) 'begin) (blockHelper (blockBody) state)); Block start: parsed as (begin (var x 2))
       ((eq? (operator command) 'var) (declareHelper command state)) ; Variable declaration
       ((eq? (operator command) '=) (assignHelper command state)) ; Assign declaration
       ((eq? (operator command) 'if) (ifHelper command state)) ; if declaration
@@ -54,35 +52,35 @@
 (define MValue
  (lambda (expression state)
    (cond
-   	 ((not (list? expression)) 
+     ((not (list? expression)) 
    	 	(MValue (cons expression '()) state))
      ((list? (valOrExpr expression)) 
      	(MValue (valOrExpr expression) state))
 
     ; Operand Expressions
      ((and (eq? (operator expression) '+) ;Addition expression
-      (validoperands? expression state))
+      (operandsCheck expression state))
      (+ (MValue (operand1 expression) state) (MValue (operand2 expression) state)))
 
      ((and (eq? (operator expression) '-) ;Negation expression
-      (validoperand? expression state))
+      (operandCheck expression state))
      (- 0 (MValue (operand1 expression) state)))
 
      ((and (eq? (operator expression) '-) ;Subtraction expression
-      (validoperands? expression state))
+      (operandsCheck expression state))
            (- (MValue (operand1 expression) state) (MValue (operand2 expression) state)))
 
      ((and (eq? (operator expression) '*) ;Multiplication expression
-      (validoperands? expression state))
+      (operandsCheck expression state))
            (* (MValue (operand1 expression) state) (MValue (operand2 expression) state)))
 
      ((and (eq? (operator expression) '/) ;Division expression
-      (validoperands? expression state))
+      (operandsCheck expression state))
      (floor (/ (MValue (operand1 expression) state) (MValue (operand2 expression) state))))
 
      ((and (eq? (operator expression) '%) ;Modulo expression
-      (validoperands? expression state))
-     (remainder (MValue (operand1 expression) state) (MValue (operand2 expression) state)))
+      (operandsCheck expression state))
+     (modulo (MValue (operand1 expression) state) (MValue (operand2 expression) state)))
 
      ((number? (valOrExpr expression)) (valOrExpr expression)) ;Check if normal number
      ((lCheck (valOrExpr expression) state) (lookup (valOrExpr expression) state))
@@ -97,46 +95,52 @@
 (define MBool
  (lambda (condition state)
    (cond
-   	 ((not (list? condition))
+     ((not (list? condition))
    	 	(MBool (cons condition '()) state))
      ((list? (valOrExpr condition))
       (MBool (valOrExpr condition) state))
 
      ((and (eq? (operator condition) '==) ;Equality checker
-      (validoperands? condition state))
-      (eq? (MValue (operand1 condition) state) (MValue (operand2 condition) state)))
+      (operandsCheck condition state))
+      (eq? (MValue (operand1 condition) state)
+           (MValue (operand2 condition) state)))
 
      ((and (eq? (operator condition) '!=) ;Inequality checker
-      (not (or (eq? (MValue (operand1 condition) state) "error")
-        (eq? (MValue (operand2 condition) state) "error"))))
-      (not(eq? (MValue (operand1 condition) state) (MValue (operand2 condition) state))))
+      (operandsCheck condition state))
+      (not(eq? (MValue (operand1 condition) state)
+               (MValue (operand2 condition) state))))
 
      ((and (eq? (operator condition) '>) ;Greater than checker
-      (validoperands? condition state))
+      (operandsCheck condition state))
       (> (MValue (operand1 condition) state) (MValue (operand2 condition) state)))
 
      ((and (eq? (operator condition) '<) ;Less than checker
-      (validoperands? condition state))
-      (< (MValue (operand1 condition) state) (MValue (operand2 condition) state)))
+      (operandsCheck condition state))
+      (< (MValue (operand1 condition) state)
+         (MValue (operand2 condition) state)))
 
      ((and (eq? (operator condition) '>=) ;Greater than equal to checker
-      (validoperands? condition state))
-      (>= (MValue (operand1 condition) state) (MValue (operand2 condition) state)))
+      (operandsCheck condition state))
+      (>= (MValue (operand1 condition) state)
+          (MValue (operand2 condition) state)))
 
      ((and (eq? (operator condition) '<=) ;Lesser than/ Equal to checker
-      (validoperands? condition state))
-      (<= (MValue (operand1 condition) state) (MValue (operand2 condition) state)))
+      (operandsCheck condition state))
+      (<= (MValue (operand1 condition) state)
+          (MValue (operand2 condition) state)))
 
      ((and (eq? (operator condition) '&&) ;And checker
-      (validbools? condition state))
-      (and (MBool (operand1 condition) state) (MBool (operand2 condition) state)))
+      (boolsCheck condition state))
+      (and (MBool (operand1 condition) state)
+           (MBool (operand2 condition) state)))
 
      ((and (eq? (operator condition) '||) ;Or checker
-      (validbools? condition state))
-      (or (MBool (operand1 condition) state) (MBool (operand2 condition) state)))
+      (boolsCheck condition state))
+      (or (MBool (operand1 condition) state)
+          (MBool (operand2 condition) state)))
 
      ((and (eq? (operator condition) '!) ;Not checker
-      (validbool? condition state))
+      (boolCheck condition state))
      (not (MBool (operand1 condition) state)))
 
      ((true? (valOrExpr condition)) #t)
@@ -164,12 +168,12 @@
 ; either a value or an expression
 (define valOrExpr (lambda (expression) (car expression)))
 
-(define blockBody (lambda (block) (cdr block)))
+(define blockBody (lambda (blk) (cdr blk)))
 
 ;=====================;
 ;MState Helper Methods;
 ;=====================;
-
+#|
 ; Block helper
 ; adds a layer to the state
 ; evaluates the block, then pops off the layer
@@ -181,16 +185,16 @@
 
 (define addLayer (lambda (state) (cons '() state)))
 (define subLayer (lambda (state) (cdr state)))
-
+|#
 ; Declare helper
 ; adds element to state if not declared
 ; Takes (var z) and state ((x y ...) (1 2 ...))
 (define declareHelper
   (lambda (command state)
     (cond
-      ((decCheck (commandVar command) (topLayerVars state))
-        (addL command (topLayer state))) ;returns state with new variable added if command valid
-      (else 'Error:UndeclaredVariable) ;error otherwise
+      ((decCheck command (topLayer state))
+        (addL command state)) ;returns state with new variable added if command valid
+      (else 'Error:VariableAlreadyDeclared) ;error otherwise
       )
     )
   )
@@ -202,7 +206,7 @@
   (lambda (command state)
     (cond
       ((lCheck (commandVar command) state)
-       (updateL (valList command) state)) ;Returns state with updated val if valid command
+       (buildState (varList state) (updateVal (valList command) state))) ;Returns state with updated val if valid command
       (else 'Error:UndeclaredVariable)
       )
     )
@@ -213,21 +217,13 @@
 (define ifHelper
   (lambda (command state)
     (cond
-      ((MBool (ifCondition command) state) ;If comdition trye
-       (MState (ifTrueExpr command) state)) ;Retusn state after true expression run
-      ((null? (ifFalseCheck command)) state) ;False expression null so will return state
-      (else (MState (ifFalseExpr command) state)) ;Else runs false expression
+      ((MBool (getArg command 2) state) ;If comdition trye
+       (MState (getArg command 3) state)) ;Retusn state after true expression run
+      ((null? (getArg command 4)) state) ;False expression null so will return state
+      (else (MState (getArg command 4) state)) ;Else runs false expression
       )
     )
   )
-
-(define ifCondition (lambda (lis)(cadr lis)))
-
-(define ifTrueExpr (lambda (lis) (caddr lis)))
-
-(define ifFalseCheck (lambda (lis) (cdddr lis)))
-
-(define ifFalseExpr (lambda (lis) (cadddr lis)))
 
 ; While helper
 ; Runs for multiple iterations until condition is no longer true
@@ -235,16 +231,12 @@
 (define whileHelper
   (lambda (command state)
     (cond
-      ((MBool (whileCondition command) state) (MState command (MState (caddr command) state)))
+      ((MBool (getArg command 2) state) 
+        (MState command (MState (getArg command 3) state)))
       (else state)
       )
     )
   )
-
-
-(define whileCondition (lambda (lis) (cadr lis)))
-
-(define loopBody (lambda (lis) (caddr lis)))
 
 ; Return helper
 ; returns integer value of command if error not returned
@@ -252,7 +244,7 @@
 (define returnHelper
   (lambda (command state)
     (cond
-      ((not (eq? (MValue (returnExpression command) state) "error"))
+      ((not (errList (MValue (returnExpression command) state)))
        (MValue (returnExpression command) state)) ;Returns int value of command if Mvalue doesn't return error
       (else (MBool (returnExpression command) state)) ;Returns boolean value if command was not a number
       )
@@ -307,7 +299,7 @@
   (lambda (var stateVars)
     (cond
       ((null? stateVars) #t) ;Null state
-      ((eq? (varList stateVars) var) #f) ;f if valriable declared
+      ((eq? (varList stateVars) (getArg var 2)) #f) ;f if valriable declared
       (else (decCheck var (valList stateVars)))
       )
     )
@@ -319,18 +311,16 @@
 (define addL  ; not needed to change for blocks, since you never add to an inner block
   (lambda (command state)
     (cond
-      ((null? (otherCommand command)) ;to check if expressions has been passed
-       (cons (cons (commandVar command) (varList state))
-             (cons (cons "undefined" (commandVar state)) '())))
+      ((null? (getArg command 3)) ;to check if expressions has been passed
+       (buildState (cons (getArg command 2) (varList state)) 
+        (cons "undefined" (commandVar state))))
       
-      ((eq? (MValue (cons (commandExpression command) '()) state) "error") ;if the state is an error from MValue, it must have been declared with boolean value
-       (cons (cons (commandVar command) (varList state))
-             (cons (cons (MBool (cons (commandExpression command) '()) state)
-                         (commandVar state)) '())))
+      ((errList (MValue (cons (getArg command 3) '()) state)) ;if the state is an error from MValue, it must have been declared with boolean value
+        buildState (cons (getArg command 2) (varList state)) 
+        (cons (MBool (getArg command 3) state) (commandVar state)))
       
-      (else (cons (cons (commandVar command) (varList state))
-                  (cons (cons (MValue (cons (commandExpression command) '()) state)
-                              (commandVar state)) '())))
+      (else (buildState (cons (getArg command 2) (varList state)) 
+        (cons (MValue (getArg command 3) state) (commandVar state))))
       )
     )
   )
@@ -341,93 +331,93 @@
   (lambda (var state)
     (cond
       ((null? state) #f)
-      ((null? (topLayerVars state)) (lCheck var (otherLayers state)))
-      ((eq? var (topLayerFirstVar state)) #t)
-      (else (lCheck var (cons (cons (otherVars (topLayer state)) (cons (otherVals (topLayer state)) '())) (otherLayers state))))
+      ((null? (varList state)) #f)
+      ((eq? var (topLayerVars state)) #t)
+      (else (lCheck var (buildState (topLayerVals state) (otherVals state))))
       )
     )
   )
 
 ; updates the state with the variable-value pair
 ; takes command (x expr) and state {((a b ...) (3 4 ...)) ((x y ...) (1 2 ...))}
-(define updateL ; edited for blocks
+(define updateVal
   (lambda (command state)
     (cond
-      ((null? state) "error") ; Should never get here because we already checked to see if variable can be added to list
-      ((null? (topLayerVars state)) (cons '() (updateL command (otherLayers state))))
-      ((eq? (varList command) (topLayerFirstVar state))
-       (cons (list (topLayerVars state) (cons (MValue (cons (commandVar command) '()) state) (topLayerOtherVals state))) (otherLayers state)))
-      (else (cons (list
-                   (cons (topLayerFirstVar state) (topLayerVars
-                                                   (updateL command (cons (list (otherVars (topLayer state))
-                                                                                (otherVals (topLayer state))) (otherLayers state)))))
-                   (cons (topLayerFirstVal state) (topLayerVals
-                                                   (updateL command (cons (list (otherVars (topLayer state))
-                                                                                (otherVals (topLayer state))) (otherLayers state))))))
-                  (otherLayers
-                   (updateL command (cons (list (otherVars (topLayer state))
-                                                (otherVals (topLayer state))) (otherLayers state))))))
+      ((null? (varList state)) #f) ;Should never get here because we already checked to see if variable can be added to list
+      ((eq? (getArg command 1) (firstVar state))
+        (cons (MValue (getArg command 2) state) (otherVals state)))
+      (else (cons (firstVal state) (updateVal command (buildState (topLayerVals state) (otherVals state)))))
       )
     )
   )
-
 
 ; Returns the value of the variable as stored in the state
 ; takes var as a variable name and state {((a b) (3 4 ...)) ((x y ...) (1 2 ...))}
 (define lookup  ; edited for blocks
   (lambda (var state)
     (cond
-      ((null? state) "error") ;returns error if X isn't in state
-      ((null? (topLayerVars state)) (lookup var (otherLayers state)))
-      ((eq? (topLayerFirstVar state) var)
-       (topLayerFirstVal state)); returns the first value if the first variable is equal to var
-      (else (lookup var (cons (cons (otherVars (topLayer state)) (cons (otherVals (topLayer state)) '())) (otherLayers state))))
+      ((null? (varList state)) 'Error:UndeclaredVariable)
+      ((eq? (topLayerVars state) var)
+        (firstVal state))
+      (else (lookup var (buildState (topLayerVals state) (otherVals state))))
       )
     )
   )
 
 ; Tests to see if the given variable is an error
 ; returns #t if it is, false otherwise
-(define iserror?
+(define errList
   (lambda (state)
     (cond
       ((or (eq? state 'Error:UndeclaredVariable) (eq? state 'Error:VariableAlreadyDeclared)
            (eq? state 'Error:InvalidBooleanExpression) (eq? state 'Error:InvalidExpression)
            (eq? state 'Error:InvalidCommand) (eq? state 'Error:UninitializedVariable)) #t)
-      (else #f))))
+      (else #f)
+      )
+    )
+  )
 
 ; Tests whether the operand to the unary command is valid
 ; Also checks to make sure it is a unary operation, not a binary one
 ; return #t if it is, false otherwise
-(define validoperand?
+(define operandCheck
   (lambda (expression state)
     (and
-     (not (iserror? (MValue (operand1 expression) state)))
-     (null? (operand2 expression)))))
+     (not (errList (MValue (operand1 expression) state)))
+     (null? (operand2 expression)))
+    )
+  )
 
 ; Tests whether the operands to the binary command are valid
 ; return #t if they are, false otherwise
-(define validoperands?
+(define operandsCheck
   (lambda (expression state)
     (and
-     (not (iserror? (MValue (operand1 expression) state)))
-     (not (iserror? (MValue (operand2 expression) state)))
-     )))
+     (not (errList (MValue (operand1 expression) state)))
+     (not (errList (MValue (operand2 expression) state)))
+     )
+    )
+  )
 
 ; Tests whether the boolean values to the binary command are valid
 ; return #t if they are, false otherwise
-(define validbools?
+(define boolsCheck
   (lambda (condition state)
     (and
-     (not (iserror? (MBoolean (operand1 condition) state)))
-     (not (iserror? (MBoolean (operand2 condition) state)))
-     )))
+     (not (errList (MBool (operand1 condition) state)))
+     (not (errList (MBool (operand2 condition) state)))
+     )
+    )
+  )
 
 ; Tests whether the boolean value to the unary command is valid
 ; return #t if it is, false otherwise
-(define validbool?
+(define boolCheck
   (lambda (condition state)
-    (not (iserror? (MBoolean (operand1 condition) state)))))
+    (not (errList (MBool (operand1 condition) state))
+      )
+    )
+  )
 
 ; return #t if the expression is "truthy" (#t from scheme or 'true from java-ish)
 (define true?
@@ -438,3 +428,20 @@
 (define false?
   (lambda (expression)
     (or (eq? expression #f) (eq? expression 'false))))
+
+; Builds the state with the given lists of variables and values
+(define buildState
+  (lambda (vars vals)
+    (cons vars (cons vals '()))
+    )
+  )
+
+(define getArg
+  (lambda (l i)
+    (cond
+      ((null? l) l)
+      ((eq? i 1) (car l))
+      (else (getArg (cdr l) (- i 1)))
+      )
+    )
+  )
