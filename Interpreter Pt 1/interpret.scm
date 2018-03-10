@@ -35,38 +35,39 @@
   (lambda (statement state return break continue throw)
     (cond
       ((not (list? state)) state)
-      ;Assign Declaration
+      ; Assign Declaration
       ((eq? (operator statement) '=) 
         (assignHelper statement state return break continue throw)) 
-      ;Begin declaration
+      ; Begin declaration
       ((eq? (operator statement) 'begin) 
         (beginHelper (operand1 statement) state return break continue throw))
-      ;Break declaration
+      ; Break declaration
       ((eq? (operator statement) 'break) 
         (break state))
-      ;Continue declaration
+      ; Continue declaration
       ((eq? (operator statement) 'continue) 
         (continue state))
-      ;If declaration
+      ; If declaration
       ((eq? (operator statement) 'if) 
         (ifHelper statement state return break continue throw))
-      ;Return declaration
+      ; Return declaration
       ((eq? (operator statement) 'return) 
         (return statement state))
-      ;Throw declaration
-      ((eq? (operator statement) 'throw) (
-        throw (MValue (commandVar statement) state return break continue throw)))
-      ;Try declaration
+      ; Throw declaration
+      ((eq? (operator statement) 'throw) 
+        (throw (MValue (commandVar statement) state return break continue throw)))
+      ; Try declaration
       ((eq? (operator statement) 'try) 
         (tryCatchFinallyHelper statement state return break continue throw))
-      ;Variable declaration
+      ; Variable declaration
       ((eq? (operator statement) 'var) 
         (declareHelper statement state return break continue throw))
-      ;while Helper
+      ; While Helper
       ((eq? (operator statement) 'while)
         (call/cc
           (lambda (new-break)
             (whileHelper (getArg statement 2) (getArg statement 3) state return new-break continue throw))))
+      ; Otherwise error
       (else (throwerror 'Error:InvalidCommand))
       )
     )
@@ -83,7 +84,7 @@
     (replaceVar (commandVar statement) (MValue (commandExpression statement) env r b c t) env)
   ))
 
-; runs each statement inside a begin block
+; Runs each statement inside a begin block after adding a layer to the state
 (define beginHelper
   (lambda (statement env return break continue throw)
     (otherLayers (dInterpret statement (addLevelOfScope env) 
@@ -91,7 +92,7 @@
   ))
 
 ; If helper
-; takes command (if bool true-expr false-expr) (false-expr optional) and state  ((x y) (1 2) ...))
+; Takes command (if bool true-expr false-expr) (false-expr optional) and state  ((x y) (1 2) ...))
 (define ifHelper
   (lambda (statement env return break continue throw)
     (cond
@@ -104,7 +105,7 @@
     )
   )
 
-; handle try/catch/finally blocks
+; Handle try/catch/finally blocks
 (define tryCatchFinallyHelper
   (lambda (statement env return break continue throw)
     (call/cc
@@ -127,7 +128,7 @@
     )
   )
 
-; same as beginHelper, but for try/catch/finally blocks
+; Same as beginHelper, but for try/catch/finally blocks
 (define beginCatch
   (lambda (statement eName eValue env return break continue throw)
     (operand1
@@ -143,7 +144,7 @@
   )
 
 ; Declare helper
-; adds element to state if not declared
+; Adds element to state if not declared
 ; Takes (var z) and state ((x y ...) (1 2 ...))
 (define declareHelper
   (lambda (statement env r b c t)
@@ -158,7 +159,7 @@
 
 ; While helper
 ; Runs for multiple iterations until condition is no longer true
-; takes command (while bool body) and state ((x y ...) (1 2 ...))
+; Takes command (while bool body) and state ((x y ...) (1 2 ...))
 (define whileHelper
   (lambda (condition statement env return break continue throw)
     (if (eq? 'true (MBool condition env return break continue throw))
@@ -189,8 +190,8 @@
 
 ;==MValue==;
 ; Evaluate the integer value of an expression
-; given expression (+ a b) and state ((x y ...) (1 2 ...))
-; returns "error" on any abnormalities
+; Given expression (+ a b) and state ((x y ...) (1 2 ...))
+; Returns "error" on any abnormalities
 (define MValue
   (lambda (statement env r b c t)
     (cond
@@ -202,27 +203,27 @@
 
       ((not (list? statement)) (lookup statement env))
 
-      ;Addition helper
+      ; Addition helper
       ((eq? (operator statement) '+) 
         (+ (MValue (getArg statement 2) env r b c t) 
           (MValue (getArg statement 3) env r b c t)))
 
-      ;Subtraction helper
+      ; Subtraction helper
       ((eq? (operator statement) '-) (if (null? (operand2 statement)) 
-      (- (MValue (getArg statement 2) env r b c t)) ; unary "-"
+      (- (MValue (getArg statement 2) env r b c t)) ; Unary "-"
       (- (MValue (getArg statement 2) env r b c t) (MValue (getArg statement 3) env r b c t))))
 
-      ;Multiplication helper
+      ; Multiplication helper
       ((eq? (operator statement) '*) 
         (* (MValue (getArg statement 2) env r b c t) 
           (MValue (getArg statement 3) env r b c t)))
 
-      ;Division helper
+      ; Division helper
       ((eq? (operator statement) '/) 
         (quotient (MValue (getArg statement 2) env r b c t) 
           (MValue (getArg statement 3) env r b c t)))
 
-      ;Modulus helper
+      ; Modulus helper
       ((eq? (operator statement) '%) 
         (remainder (MValue (getArg statement 2) env r b c t) 
           (MValue (getArg statement 3) env r b c t)))
@@ -236,61 +237,62 @@
 ;==MBool==;
 ; Function to evaluate truth val of expression
 ; Example input: (== x y) and state ((x y ...) (1 2 ...))
-; returns 'true or 'false if the expression is valid
+; Returns 'true or 'false if the expression is valid
 (define MBool
   (lambda (statement state r b c t)
     (cond
       ((not (list? statement)) (MValue statement state r b c t))
-      ;True
+      ; True
       ((eq? statement 'true) 'true)
-      ;False
+      ; False
       ((eq? statement 'false) 'false)
 
       ((not (list? statement)) (MValue statement state r b c t))
 
-      ;Greater than checker
+      ; Greater than checker
       ((eq? (operator statement) '>) 
         (if (> (MValue (getArg statement 2) state r b c t) 
           (MValue (getArg statement 3) state r b c t)) 'true 'false))
 
-      ;Lesser than checker
+      ; Lesser than checker
       ((eq? (operator statement) '<) 
         (if (< (MValue (getArg statement 2) state r b c t) 
           (MValue (getArg statement 3) state r b c t)) 'true 'false))
 
-      ;Greater than or equal to checker
+      ; Greater than or equal to checker
       ((eq? (operator statement) '>=) 
         (if (>= (MValue (getArg statement 2) state r b c t) 
           (MValue (getArg statement 3) state r b c t)) 'true 'false))
 
-      ;Lesser than or qual to checker
+      ; Lesser than or qual to checker
       ((eq? (operator statement) '<=) 
         (if (<= (MValue (getArg statement 2) state r b c t) 
           (MValue (getArg statement 3) state r b c t)) 'true 'false))
 
-      ;Equality checker
+      ; Equality checker
       ((eq? (operator statement) '==) 
         (if (= (MValue (getArg statement 2) state r b c t) 
           (MValue (getArg statement 3) state r b c t)) 'true 'false))
 
-      ;Inequality checker
+      ; Inequality checker
       ((eq? (operator statement) '!=) 
         (if (not (= (MValue (getArg statement 2) state r b c t) 
           (MValue (getArg statement 3) state r b c t))) 'true 'false))
 
-      ;And Checker
+      ; And Checker
       ((eq? (operator statement) '&&) 
         (if (eq? #t (and (eq? 'true (MBool (getArg statement 2) state r b c t)) 
           (eq? 'true (MBool (getArg statement 3) state r b c t)))) 'true 'false))
 
-      ;Or checker
+      ; Or checker
       ((eq? (operator statement) '||) 
         (if (eq? #t (or (eq? 'true (MBool (getArg statement 2) state r b c t)) 
           (eq? 'true (MBool (getArg statement 3) state r b c t)))) 'true 'false))
 
-      ;Not checker
+      ; Not checker
       ((eq? (operator statement) '!) 
         (if (eq? #t (not (eq? 'true (MBool (getArg statement 2) state r b c t)))) 'true 'false))
+      
       (else (throwerror 'Error:InvalidBooleanExpression))
       )
     )
@@ -301,7 +303,7 @@
 ;====================;
 
 ; Returns the value of the variable as stored in the state
-; takes var as a variable name and state {((a b) (3 4 ...)) ((x y ...) (1 2 ...))}
+; Takes var as a variable name and state {((a b) (3 4 ...)) ((x y ...) (1 2 ...))}
 (define lookup
   (lambda (var state)
     (cond
@@ -312,7 +314,7 @@
     )
   )
 
-; helper for lookup
+; Helper for lookup
 (define lookupVal
   (lambda (var state)
     (cond
@@ -322,7 +324,7 @@
     )
   )
 
-; update variable value
+; Update variable value
 (define replaceVar
   (lambda (var value state)
     (cond
@@ -335,7 +337,7 @@
     )
   )
 
-; helper for replaceVar
+; Helper for replaceVar
 (define getReplaced
   (lambda (var value state)
     (cond
@@ -350,7 +352,7 @@
     )
   )
 
-; add variable to state
+; Add variable to state
 (define insert
   (lambda (var value state)
     (cons (cons (cons var (firstVar state)) 
@@ -358,7 +360,7 @@
     )
   )
 
-; check if the variable is in the given environment
+; Check if the variable is in the given environment
 (define inEnvironment?
   (lambda (var vList)
     (cond
@@ -370,7 +372,7 @@
 
 (define resOfVariablesInState cdr)
 
-;adds a level of scope to the given state
+; Adds a level of scope to the given state
 (define addLevelOfScope
   (lambda (state)
     (cons '(()()) state)))
