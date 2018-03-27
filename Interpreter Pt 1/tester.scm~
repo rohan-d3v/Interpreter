@@ -1,5 +1,5 @@
 ; you must set lang to "Pretty Big"
-(load "functionParser.scm")
+(load "simpleParser.scm")
 (load "interpret.scm")
 
 (define testcases
