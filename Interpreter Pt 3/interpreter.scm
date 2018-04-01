@@ -1,83 +1,59 @@
-;EECS 345 Interpreter pt 3
-;Team Members:	Rohan Krishna, Zach Perlo, Lee Radics
-;Case IDs:		rxr353, zip5, 
 
-;This Code was re-written/ restructured using a solution2.scm from Canvas to help clean up MState etc.
+; Interpreter Pt 2 EECS 345
+; Group Members: Lee Radics, Zach Perlo, Rohan Krishna
+; Case IDs: elr61, zip5, rxr353
 
+; This code was restructured using solution2 from Canvas to better abstract certain
+; functions and generally clean up Mstate.
 (load "functionParser.scm")
 
-
-; An interpreter for the simple language that uses call/cc for the continuations.  Does not handle side effects.
-;(define call/cc call-with-current-continuation)
-
-
-; The functions that start interpret-...  all return the current environment.
-; The functions that start eval-...  all return a value
-
-; The main function.  Calls parser to get the parse tree and interprets it with a new environment.  The returned value is in the environment.
-
+; Interpret a file containing Java-like code.
+; Execution: Run begin-interpret. Pass it outer-environment with an empty layer for main's local
+; variable and function definitions.
 (define interpret
   (lambda (file)
     (call/cc
       (lambda (return)
         (let* ((initial-return (lambda (statement env) 
-        	(return (Mvalue (operand statement) 
-        		env return default-break default-continue default-throw))))
-
-               (outer-environment (do-interpret (parser file) initEnv 
-               	(lambda (statement env) (return env)) 
-               	default-break default-continue default-throw))
-
-               (begin-interpret (lambda (env) 
-               	(Mvalue-funcall (mainFuncall main) 
-               		env initial-return default-break default-continue default-throw))))
+          (return (Mvalue (operand statement) 
+            env return default-break default-continue default-throw))))
+               (outer-environment (do-interpret (parser file) 
+                initial-env (lambda (statement env) 
+                  (return env)) default-break default-continue default-throw))
+               (begin-interpret (lambda (env) (Mvalue-funcall (mainFuncall main) env initial-return default-break default-continue default-throw))))
 
               ; Begin interpreting. Pass in the environment, which is built by interpreting the outermost layer
               ; of the program, containing function and global variable definitions.
-              (begin-interpret 
-              	(getFunctionExecutionEnvironment (mainFuncall main) 
-              		outer-environment initial-return default-break default-continue default-throw)))
-        )
-      )
-    )
-  )
-
+              (begin-interpret (getFunctionExecutionEnvironment (mainFuncall main) outer-environment initial-return default-break default-continue default-throw)))))))
 
 (define main '((funcall main)))
 (define mainFuncall car)
 
-; do-interpret recursively evaluates statements
+; do-interpret recursively evaluates statements and modifies the state appropriately
+; based on their contents.
 (define do-interpret
   (lambda (statement state return break continue throw)
     (if (null? statement)
       state
       (do-interpret (restOfExpressions statement)
                     (Mstate (firstExpression statement) state return break continue throw)
-                    return break continue throw)
-      )
-    )
-  )
+                    return break continue throw))))
 
-(define initEnv '(((true false) (true false))))
-(define default-break 
-	(lambda (s) 
-	(error 'invalidBreak "Break was incorrect")))
-(define default-continue 
-	(lambda (s) 
-		(error 'invalidContinue "Continue was incorrect")))
-(define default-throw 
-	(lambda (e s) 
-		(error 'uncaughtException "Uncaught exception")))
+(define initial-env '(((true false) (true false))))
+(define default-break (lambda (s) (error 'invalidBreak "Break was called outside of a while loop")))
+(define default-continue (lambda (s) (error 'invalidContinue "Continue was called outside of a while loop")))
+(define default-throw (lambda (e s) (error 'uncaughtException "An exception was thrown but not caught")))
 
-; interpret a statement in the environment with continuations for return, break, continue, throw
+; Mstate modifies the state depending on the contents of statement, then returns the state..
+; TODO: Move while's continuation to Mstate-while
 (define Mstate
   (lambda (statement state return break continue throw)
     (cond
-      ((eq? (operator statement) '=) (assignHelper statement state return break continue throw))
-      ((eq? (operator statement) 'begin) (beginHelper (cdr statement) state return break continue throw))
+      ((eq? (operator statement) '=) (Mstate-assignment statement state return break continue throw))
+      ((eq? (operator statement) 'begin) (Mstate-begin (cdr statement) state return break continue throw))
       ((eq? (operator statement) 'break) (break state))
       ((eq? (operator statement) 'continue) (continue state))
-      ((eq? (operator statement) 'funcall) (funcallHelper statement state return break continue throw))
+      ((eq? (operator statement) 'funcall) (Mstate-funcall statement state return break continue throw))
       ((eq? (operator statement) 'function) (Mstate-func statement state))
       ((eq? (operator statement) 'if) (Mstate-if statement state return break continue throw))
       ((eq? (operator statement) 'return) (return statement state))
@@ -92,12 +68,8 @@
 
 (define exception cadr)
 
-;=======================;
-;Mstate Helper Functions;
-;=======================;
-
-; assignHelper handles variable assignment
-(define assignHelper
+; Mstate-assignment handles variable assignment
+(define Mstate-assignment
   (lambda (statement env r b c t)
     (replace_var (variable statement) (Mvalue (operation statement) env r b c t) env)))
 
@@ -105,7 +77,7 @@
 ; the contents of the block inside a new layer of scope.
 ; Statement format:
 ; (begin (stmt-1) (stmt-2) ...)
-(define beginHelper
+(define Mstate-begin
   (lambda (statement env return break continue throw)
     (getInnerScope (do-interpret statement
                                  (addLevelOfScope env)
@@ -146,11 +118,11 @@
 ; value, execute the function and then return the environment.
 ; Statement format:
 ; (funcall function-name actual-param-1 actual-param-2 ...)
-(define funcallHelper
+(define Mstate-funcall
   (lambda (funcall env return break continue throw)
     (begin (Mvalue-funcall funcall env return break continue throw) env)))
 
-;helpers for funcallHelper
+;helpers for Mstate-funcall
 (define globalStateOfEnvironment cdr)
 (define getFuncBody cadr)
 (define getFuncEnvironment caddr)
@@ -165,21 +137,21 @@
       (lambda (catch-continuation)
         (letrec ((finally (lambda (s)
                   (if (pair? (finally-stmt statement))
-                      (beginHelper (finally-body statement) s return break continue throw)
+                      (Mstate-begin (finally-body statement) s return break continue throw)
                       s)))
                 (try (lambda (new-throw)
                   ; if this try block is accompanied by a catch block, pass a continuation that
                   ; jumps us to it when we encounter a throw. Otherwise, pass whatever throw continuation
                   ; we were passed when we entered this try block.
                   (if (pair? (catch-block statement))
-                    (finally (beginHelper (try-body statement) env return break continue new-throw))
-                    (finally (beginHelper (try-body statement) env return break continue throw)))))
+                    (finally (Mstate-begin (try-body statement) env return break continue new-throw))
+                    (finally (Mstate-begin (try-body statement) env return break continue throw)))))
                 (catch (lambda (e s)
                   (finally (catch-begin (catch-body statement) (catch-err statement) e s return break continue throw)))))
                 ; Call "try" with catch as the catch-continuation
                 (try (lambda (e) (catch-continuation (catch e env)))))))))
 
-; Same as beginHelper, but with the addition of inserting the exception into the
+; Same as Mstate-begin, but with the addition of inserting the exception into the
 ; environment before calling do-interpret.
 (define catch-begin
   (lambda (statement e-name e-value env return break continue throw)
@@ -228,3 +200,271 @@
 
 (define parse-while-condition cadr)
 (define parse-while-statement caddr)
+
+; Mvalue: Evaluate an expression to determine its value.
+; Last params are return break continue throw. Shortened for brevity.
+(define Mvalue
+  (lambda (statement env r b c t)
+    (cond
+      ((number? statement) statement)
+      ((eq? statement 'true) 'true)
+      ((eq? statement 'false) 'false)
+      ((not (list? statement)) (lookup statement env))
+      ((eq? (operator statement) '+) (+ (Mvalue (operand1 statement) env r b c t) (Mvalue (operand2 statement) env r b c t)))
+      ((eq? (operator statement) '-) (if (null? (cddr statement))
+                                         (- (Mvalue (operand1 statement) env r b c t)) ; unary "-"
+                                         (- (Mvalue (operand1 statement) env r b c t) (Mvalue (operand2 statement) env r b c t))))
+      ((eq? (operator statement) '*) (* (Mvalue (operand1 statement) env r b c t) (Mvalue (operand2 statement) env r b c t)))
+      ((eq? (operator statement) '/) (quotient (Mvalue (operand1 statement) env r b c t) (Mvalue (operand2 statement) env r b c t)))
+      ((eq? (operator statement) '%) (remainder (Mvalue (operand1 statement) env r b c t) (Mvalue (operand2 statement) env r b c t)))
+      ((eq? (operator statement) 'funcall) (Mvalue-funcall statement env r b c t))
+      (else (Mbool statement env r b c t)))))
+
+(define operator car)
+(define operand1 cadr)
+(define operand2 caddr)
+(define operand operand1) ; TODO: Can this be moved / replaced?
+
+; When a function is called, Mvalue-funcall does the following:
+; 1. Creates the function's execution environment using the environment function stored
+;    in the function closure
+; 2. Binds the actual parameters to the formal parameters in the new environment
+; 3. Evaluates the body of the function.
+;
+; Differing
+; Execute a function and return the value produced by its return statement.
+; TODO: Match env-contains-symbol? check from Mstate-funcall
+(define Mvalue-funcall
+  (lambda (statement env return break continue throw)
+    (call/cc
+      (lambda (new-return)
+        (let* ((func-name (funcName statement))
+               (function (lookup func-name env)))
+              (do-interpret (getFuncBody function)
+                            ; replace the below with a call to the function closure's create-env function
+                            ; function in the closure should already pass the function name into getFunctionExecutionEnvironment
+                            ; so that we don't have to do it here
+                            (getFunctionExecutionEnvironment statement env return break continue throw)
+                            (lambda (statement env) (new-return (Mvalue (operand statement) env return break continue throw)))
+                            break
+                            continue
+                            throw))))))
+
+; getFunctionExecutionEnviroinment gets the execution environment for a function call,
+; which includes everything available to the function through static scoping along with
+; its parameters.
+; Assumes funcall is of format (funcall methodName actual-param-1 actual-param-2 ...)
+; Return looks like
+; (((formal-param-names)(actual-param-values)) ((declaration-scope-symbols)(declaration-scope-values)) ... ((global-symbols)(global-values)))
+(define getFunctionExecutionEnvironment
+  (lambda (funcall env r b c t)
+    (cons (bindParameters (function-name funcall) (param-list funcall) env r b c t) (getFunctionDeclarationEnvironment (function-name funcall) env))))
+
+(define function-name cadr)
+(define param-list cddr)
+
+; Returns an environment with all bindings within the function's scope - i.e.,
+; all bindings available in the layer it was declared and above. Does not prepend
+; an empty local scope. Based on static scoping.
+; Return looks like:
+; (((declaration-scope-symbols)(declaration-scope-values)) ... ((global-symbols)(global-values)))
+(define getFunctionDeclarationEnvironment
+  (lambda (funName env)
+    (cond
+      ((env-contains-symbol? funName (variables env)) env)
+      (else (getFunctionDeclarationEnvironment funName (nextLayers env))))))
+
+; Given the name of a function, the actual parameters being passed to the function,
+; and the environment from which the function was called, locate the function closure
+; in env and bind the actual parameters to the function's formal parameters.
+; Return looks like:
+; ((formal-param-names)(actual-param-values))
+(define bindParameters
+  (lambda (funcName actualParams env r b c t)
+    (bindActualToFormal (getParamsFromEnvironment funcName env) actualParams env '(()()) r b c t)))
+
+; Returns the list of formal parameters as stored in the function closure in the environment.
+(define getParamsFromEnvironment
+  (lambda (funName env)
+    (car (lookup funName env))))
+
+; Recursively bind the actual parameters to the formal parameters.
+; Accepts the environment from which the function is being called and localEnv, which should
+; be '(()()) on the first call.
+; Not a great name but... meh
+(define bindActualToFormal
+  (lambda (formalParams actualParams env localEnv r b c t)
+    (cond
+      ; If we've reached the end of the formal or actual param list but not the other, the
+      ; function was not called with the correct number of parameters and we throw an error.
+      ((and (null? formalParams) (not (null? actualParams))) (error 'methodSignature (format "too many parameters")))
+      ((and (not (null? formalParams)) (null? actualParams)) (error 'methodSignature (format "too few parameters")))
+      ((null? formalParams) localEnv)
+      (else (bindActualToFormal (restOfParams formalParams)
+                                (restOfParamValues actualParams)
+                                env
+                                (currentLayer (insert (currentParam formalParams) (Mvalue (currentParamValue actualParams) env r b c t) (cons localEnv '())))
+                                r b c t)))))
+
+;helpers for bindActualToFormal
+(define restOfParams cdr)
+(define restOfParamValues cdr)
+(define currentParam car)
+(define currentParamValue car)
+
+; Mbool: Evaluate a statement for a truth value of true or false.
+(define Mbool
+  (lambda (statement state r b c t)
+    (cond
+      ((not (list? statement)) (Mvalue statement state r b c t))
+      ((eq? statement 'true) 'true)
+      ((eq? statement 'false) 'false)
+      ((not (list? statement)) (Mvalue statement state r b c t))
+      ((eq? (comparator statement) '>) (if (> (Mvalue (operand1 statement) state r b c t) (Mvalue (operand2 statement) state r b c t)) 'true 'false))
+      ((eq? (comparator statement) '<) (if (< (Mvalue (operand1 statement) state r b c t) (Mvalue (operand2 statement) state r b c t)) 'true 'false))
+      ((eq? (comparator statement) '>=) (if (>= (Mvalue (operand1 statement) state r b c t) (Mvalue (operand2 statement) state r b c t)) 'true 'false))
+      ((eq? (comparator statement) '<=) (if (<= (Mvalue (operand1 statement) state r b c t) (Mvalue (operand2 statement) state r b c t)) 'true 'false))
+      ((eq? (comparator statement) '==) (if (= (Mvalue (operand1 statement) state r b c t) (Mvalue (operand2 statement) state r b c t)) 'true 'false))
+      ((eq? (comparator statement) '!=) (if (not (= (Mvalue (operand1 statement) state r b c t) (Mvalue (operand2 statement) state r b c t))) 'true 'false))
+      ((eq? (comparator statement) 'funcall) (Mvalue statement state r b c t))
+      ((eq? (operator statement) '&&) (if (eq? #t (and (eq? 'true (Mbool (operand1 statement) state r b c t)) (eq? 'true (Mbool (operand2 statement) state r b c t)))) 'true 'false))
+      ((eq? (operator statement) '||) (if (eq? #t (or (eq? 'true (Mbool (operand1 statement) state r b c t)) (eq? 'true (Mbool (operand2 statement) state r b c t)))) 'true 'false))
+      ((eq? (operator statement) '!) (if (eq? #t (not (eq? 'true (Mbool (operand1 statement) state r b c t)))) 'true 'false))
+      (else (error 'invalidInput "This expression cannot be evaluated to a boolean value")))))
+
+(define comparator car)
+
+; HELPER METHODS
+
+(define lookup
+  (lambda (var state)
+    (cond
+      ((null? state) (error 'unknown (format "Symbol ~a does not exist" var)))
+      ((env-contains-symbol? var (variables state)) (lookupVal var (currentLayer state)))
+      (else (lookup var (nextLayers state))))))
+
+(define lookupVal
+  (lambda (var state)
+    (cond
+      ((eq? (variable1 state) var) (unbox (valueOfVar1 state)))
+      (else (lookupVal var (cons (restOfVars state) (cons (restOfValues state) '())))))))
+
+
+;helpers for lookup
+(define nextLayers cdr)
+
+(define currentLayer car)
+
+(define variableList caar)
+
+; remove removes a variable from the state
+; it takes the variable name and the state and removes it from the state
+(define replace_var
+  (lambda (var value state)
+    (cond
+      ((null? state) (error 'out-of-scope (format "Symbol ~a is out of scope or does not exist" var)))
+      ((env-contains-symbol? var (variables state)) (cons (get_replaced var value (currentLayer state)) (nextLayers state)))
+      (else (cons (currentLayer state) (replace_var var value (nextLayers state)))))))
+
+(define get_replaced
+  (lambda (var value state)
+    (cond
+      ((eq? (variable1 state) var) (cons (cons var (restOfVars state)) (cons (cons (begin (set-box! (valueOfVar1 state) value) (valueOfVar1 state)) (restOfValues state)) '())))
+      (else (currentLayer (insert (variable1 state) (unbox (valueOfVar1 state)) (cons (get_replaced var value (cons (restOfVars state) (cons (restOfValues state) '()))) '())))))))
+
+;insert inerts a variable into the state, if the value already exists it replaces it
+;returns the state with a given variable and value added in
+(define insert
+  (lambda (var value state)
+    (cons (cons (cons var (variables state)) (cons (cons (box value) (valuesInState state)) '())) (cdr state))))
+
+;createClosure creates a closure functon that will be added to the state
+;the thirsd part of the cosure is the framework for the environment
+(define createClosure
+  (lambda (params body)
+    (cons params (cons body (cons getFunctionExecutionEnvironment '())))))
+
+;stateContains? checks if the variable has already been declared in the state
+(define stateContains
+  (lambda (var state)
+    (cond
+      ((null? state) #f)
+      ((env-contains-symbol? var (variables state)) #t)
+      (else (stateContains var (nextLayers state))))))
+
+(define env-contains-symbol?
+  (lambda (var varList)
+    (cond
+     ((null? varList) #f)
+     ((eq? var (var1 varList)) #t)
+     (else (env-contains-symbol? var (cdr varList))))))
+
+;helper for state contains
+(define var1 car)
+
+(define resOfVariablesInState cdr)
+
+;adds a level of scope to the given state
+(define addLevelOfScope
+  (lambda (state)
+    (cons '(()()) state)))
+
+;remove the outer most level of scope
+(define getInnerScope cdr)
+
+;gets the code inside the braces
+(define insideBraces cdr)
+
+;variables in the state
+(define variables caar)
+
+;values in the state
+(define valuesInState cadar)
+
+;outerLevelVariables gets the variables in the outer most scope
+(define outerLevelVariables caar)
+
+;outerLevelValues gets the values in the outer most scope
+(define outerLevelValues cadar)
+
+;secondLevelVariables gets the variables in the outer most scope
+(define secondLevelVariables caadr)
+
+;secondLevelValues gets the values in the outer most scope
+(define secondLevelValues cadadr)
+
+;gets the first variable in the state
+(define variable1 caar)
+
+;gets the value associated with the first variable in the state
+(define valueOfVar1 caadr)
+
+;rest of the variables in the state
+(define restOfVars cdar)
+
+;rest of the values in the state
+(define restOfValues cdadr)
+
+;get the values in the state
+(define allValues cadar)
+
+;the expression in the stat of the program
+(define firstExpression car)
+
+;the rest of the expressions in the programs
+(define restOfExpressions cdr)
+
+;action
+(define action caar)
+
+;the expression being returned
+(define expression cdar)
+
+;variable
+(define variable cadr)
+
+;third element
+(define thirdElement cddr)
+
+;operation
+(define operation caddr)
