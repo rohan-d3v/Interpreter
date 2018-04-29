@@ -5,7 +5,7 @@
 ; This code was restructured using call/cc solution from Canvas to better abstract certain
 ; functions and generally clean up Mstate.
 (load "classParser.scm")
-
+(define call/cc call-with-current-continuation) 
 ; Interpret a file containing Java-like code.
 ;
 ; Setup:
